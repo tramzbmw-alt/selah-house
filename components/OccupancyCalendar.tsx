@@ -2,9 +2,8 @@
 
 import { IconCalendarEvent, IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 
-// Aug 2026: starts Saturday (index 6), 31 days
 const DOW        = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const LEAD_EMPTY = 6;
+const LEAD_EMPTY = 6; // Aug 2026 starts on Saturday
 const TOTAL_DAYS = 31;
 const TODAY      = 21;
 const TRAVIS     = new Set([18, 19, 20, 21, 22, 23]);
@@ -32,7 +31,7 @@ export default function OccupancyCalendar() {
       {/* Card header */}
       <div
         className="flex items-center justify-between px-5 py-4"
-        style={{ borderBottom: "1px solid #f0efe9" }}
+        style={{ borderBottom: "1px solid #f0efe9", flexShrink: 0 }}
       >
         <div className="flex items-center gap-2 text-[13.5px] font-semibold" style={{ color: "#1c1c1a" }}>
           <IconCalendarEvent size={15} style={{ color: "#3b9e95" }} strokeWidth={2} />
@@ -48,10 +47,10 @@ export default function OccupancyCalendar() {
         </button>
       </div>
 
-      {/* Calendar body — centered */}
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-5">
-        {/* Month nav */}
-        <div className="flex items-center justify-between w-full mb-4" style={{ maxWidth: 280 }}>
+      {/* Calendar body — fills remaining card space, no centering constraint */}
+      <div className="flex flex-col flex-1 px-5 py-5">
+        {/* Month nav — full width */}
+        <div className="flex items-center justify-between w-full mb-4">
           <span className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>August 2026</span>
           <div className="flex gap-1">
             {[IconChevronLeft, IconChevronRight].map((Icon, i) => (
@@ -74,21 +73,26 @@ export default function OccupancyCalendar() {
           </div>
         </div>
 
-        {/* Grid — fixed 36px columns, centered */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 36px)", gap: 4 }}>
+        {/* Grid — 1fr columns fill the full card width, 44px cell height */}
+        <div
+          className="w-full"
+          style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}
+        >
           {/* Day-of-week headers */}
           {DOW.map(d => (
             <div
               key={d}
               className="flex items-center justify-center text-[10px] font-medium uppercase tracking-[0.05em]"
-              style={{ height: 24, color: "#9e9b93" }}
+              style={{ height: 28, color: "#9e9b93" }}
             >
               {d}
             </div>
           ))}
 
           {/* Empty leading cells */}
-          {empties.map((_, i) => <div key={`e${i}`} />)}
+          {empties.map((_, i) => (
+            <div key={`e${i}`} style={{ height: 44 }} />
+          ))}
 
           {/* Day cells */}
           {days.map(day => {
@@ -97,13 +101,13 @@ export default function OccupancyCalendar() {
             return (
               <div
                 key={day}
-                className="flex items-center justify-center rounded-md text-[11.5px] cursor-pointer transition-opacity duration-100 hover:opacity-75"
+                className="flex items-center justify-center rounded-md text-[12px] cursor-pointer transition-opacity duration-100 hover:opacity-75"
                 style={{
-                  height: 36,
-                  background:  s.bg,
-                  color:       s.color,
-                  border:      isToday ? "2px solid #3b9e95" : (s.border ?? "none"),
-                  fontWeight:  isToday ? 600 : (s.fontWeight ?? 400),
+                  height:     44,
+                  background: s.bg,
+                  color:      s.color,
+                  border:     isToday ? "2px solid #3b9e95" : (s.border ?? "none"),
+                  fontWeight: isToday ? 600 : (s.fontWeight ?? 400),
                 }}
               >
                 {day}
@@ -112,13 +116,13 @@ export default function OccupancyCalendar() {
           })}
         </div>
 
-        {/* Legend */}
+        {/* Legend — full width */}
         <div
           className="flex items-center gap-4 w-full mt-4 pt-4"
-          style={{ maxWidth: 280, borderTop: "1px solid #f0efe9" }}
+          style={{ borderTop: "1px solid #f0efe9" }}
         >
           {[
-            { label: "Travis", bg: "rgba(59,158,149,0.13)",  border: "1px solid rgba(59,158,149,0.22)" },
+            { label: "Travis", bg: "rgba(59,158,149,0.13)", border: "1px solid rgba(59,158,149,0.22)" },
             { label: "Briana", bg: "rgba(192,128,64,0.15)", border: "1px solid rgba(192,128,64,0.22)" },
           ].map(({ label, bg, border }) => (
             <div key={label} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "#6b6960" }}>

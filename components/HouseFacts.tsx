@@ -8,22 +8,16 @@ const FACTS = [
 
 export default function HouseFacts() {
   return (
-    <div className="grid grid-cols-5 gap-3">
+    <div className="flex gap-3">
       {FACTS.map(({ icon, val, sub }) => (
         <div
           key={val}
-          className="flex items-center gap-3 rounded-xl px-4 py-3"
+          className="flex-1 flex flex-col items-center justify-center text-center rounded-xl py-4 px-3"
           style={{ background: "#fff", border: "1px solid #e6e4de" }}
         >
-          <span className="text-[18px] leading-none flex-shrink-0">{icon}</span>
-          <div className="min-w-0">
-            <div className="text-[12.5px] font-medium truncate" style={{ color: "#1c1c1a" }}>
-              {val}
-            </div>
-            <div className="text-[10.5px] truncate" style={{ color: "#9e9b93" }}>
-              {sub}
-            </div>
-          </div>
+          <span className="text-[20px] leading-none mb-2">{icon}</span>
+          <div className="text-[12.5px] font-medium" style={{ color: "#1c1c1a" }}>{val}</div>
+          <div className="text-[10.5px] mt-0.5" style={{ color: "#9e9b93" }}>{sub}</div>
         </div>
       ))}
     </div>
