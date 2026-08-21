@@ -18,8 +18,8 @@ export default function Dashboard() {
         <Topbar />
 
         <main
-          className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-4"
-          style={{ background: "#f5f4f1", padding: '24px', boxSizing: 'border-box' }}
+          className="flex-1 flex flex-col gap-4"
+          style={{ background: "#f5f4f1", padding: '24px', overflow: 'hidden', overflowY: 'auto', boxSizing: 'border-box' }}
         >
           <StatsRow />
           <HouseFacts />

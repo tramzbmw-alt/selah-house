@@ -118,7 +118,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 pb-6">
+      <div style={{ paddingLeft: '12px', paddingRight: '12px', paddingBottom: '24px' }}>
         <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 12 }} />
         <a
           href="#"
