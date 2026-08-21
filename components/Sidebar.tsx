@@ -73,11 +73,14 @@ export default function Sidebar() {
       <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "0 16px" }} />
 
       {/* Nav */}
-      <nav className="flex flex-col flex-1 px-3 pt-4">
+      <nav
+        className="flex flex-col flex-1"
+        style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '16px' }}
+      >
         {NAV.map(({ section, items }, idx) => (
-          <div key={section} className={idx > 0 ? "mt-8" : ""}>
+          <div key={section} style={{ marginTop: idx > 0 ? '32px' : '0' }}>
             <div
-              className="text-[10px] uppercase tracking-[0.1em] px-2 mb-2"
+              className="text-[10px] uppercase tracking-[0.1em] mb-2"
               style={{ color: "rgba(255,255,255,0.22)" }}
             >
               {section}

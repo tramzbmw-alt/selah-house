@@ -10,14 +10,14 @@ export default function Dashboard() {
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar />
 
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ background: "#f4f3f0" }}>
+      <div
+          className="flex flex-col flex-1 min-w-0 overflow-hidden"
+          style={{ background: "#f4f3f0", padding: '24px', boxSizing: 'border-box' }}
+        >
         <div style={{ height: 3, background: "#3b9e95", flexShrink: 0 }} />
         <Topbar />
 
-        <main
-          className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-4"
-          style={{ padding: '24px' }}
-        >
+        <main className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-4">
           <StatsRow />
           <HouseFacts />
           <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
