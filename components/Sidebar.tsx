@@ -73,11 +73,11 @@ export default function Sidebar() {
       <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "0 16px" }} />
 
       {/* Nav */}
-      <nav className="flex flex-col flex-1 px-3 pt-4 gap-px">
-        {NAV.map(({ section, items }) => (
-          <div key={section} className="mb-1">
+      <nav className="flex flex-col flex-1 px-3 pt-4">
+        {NAV.map(({ section, items }, idx) => (
+          <div key={section} className={idx > 0 ? "mt-8" : ""}>
             <div
-              className="text-[10px] uppercase tracking-[0.1em] px-2 mb-1.5"
+              className="text-[10px] uppercase tracking-[0.1em] px-2 mb-2"
               style={{ color: "rgba(255,255,255,0.22)" }}
             >
               {section}
@@ -86,7 +86,7 @@ export default function Sidebar() {
               <a
                 key={label}
                 href="#"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150 mb-px"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150"
                 style={{
                   color:      active ? "#6ecfc3" : "rgba(255,255,255,0.46)",
                   background: active ? "rgba(59,158,149,0.18)" : "transparent",
