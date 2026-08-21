@@ -11,54 +11,74 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 
-const navItems = [
-  { section: "Overview", items: [
-    { icon: IconHome2, label: "Dashboard", active: true },
-    { icon: IconCalendar, label: "Scheduling" },
-  ]},
-  { section: "House", items: [
-    { icon: IconTool, label: "Maintenance" },
-    { icon: IconReceipt2, label: "Expenses" },
-    { icon: IconFiles, label: "Documents" },
-    { icon: IconAddressBook, label: "Vendors" },
-  ]},
-  { section: "Guests", items: [
-    { icon: IconUsers, label: "People" },
-  ]},
+const NAV = [
+  {
+    section: "Overview",
+    items: [
+      { icon: IconHome2,       label: "Dashboard",  active: true },
+      { icon: IconCalendar,    label: "Scheduling" },
+    ],
+  },
+  {
+    section: "House",
+    items: [
+      { icon: IconTool,        label: "Maintenance" },
+      { icon: IconReceipt2,    label: "Expenses" },
+      { icon: IconFiles,       label: "Documents" },
+      { icon: IconAddressBook, label: "Vendors" },
+    ],
+  },
+  {
+    section: "Guests",
+    items: [
+      { icon: IconUsers,       label: "People" },
+    ],
+  },
 ];
 
 export default function Sidebar() {
   return (
-    <aside style={{ background: "#152f2d", width: 230, flexShrink: 0 }} className="flex flex-col gap-7 px-4 py-7 h-full overflow-y-auto">
-      {/* Logo */}
-      <div className="px-2">
+    <aside
+      className="flex flex-col h-full overflow-y-auto"
+      style={{ width: 220, flexShrink: 0, background: "#1a3d3a" }}
+    >
+      {/* Logo — centered */}
+      <div className="flex flex-col items-center text-center px-4 pt-8 pb-6">
         <div
-          className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center text-xl mb-2.5"
-          style={{ background: "#3b9e95" }}
+          className="flex items-center justify-center text-xl rounded-xl mb-3"
+          style={{ width: 42, height: 42, background: "#3b9e95" }}
         >
           🌊
         </div>
-        <div className="text-[17px] font-semibold tracking-tight" style={{ color: "#e8f7f6" }}>
+        <div className="text-[16px] font-semibold tracking-tight" style={{ color: "#e6f5f4" }}>
           Selah House
         </div>
-        <div className="text-[11.5px] mt-0.5" style={{ color: "rgba(255,255,255,0.38)" }}>
+        <div className="text-[11px] mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>
           Wilmington, NC · Murrayville
         </div>
         <div
-          className="text-[10.5px] mt-1 tracking-wide"
-          style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", color: "rgba(255,255,255,0.22)" }}
+          className="text-[10px] mt-1.5"
+          style={{
+            fontFamily: "var(--font-lora), serif",
+            fontStyle: "italic",
+            color: "rgba(255,255,255,0.2)",
+            letterSpacing: "0.02em",
+          }}
         >
           pause · breathe · reflect
         </div>
       </div>
 
+      {/* Divider */}
+      <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "0 16px" }} />
+
       {/* Nav */}
-      <nav className="flex flex-col gap-px">
-        {navItems.map(({ section, items }) => (
-          <div key={section}>
+      <nav className="flex flex-col flex-1 px-3 pt-4 gap-px">
+        {NAV.map(({ section, items }) => (
+          <div key={section} className="mb-1">
             <div
-              className="text-[10px] uppercase tracking-widest px-2.5 mt-2.5 mb-1"
-              style={{ color: "rgba(255,255,255,0.25)" }}
+              className="text-[10px] uppercase tracking-[0.1em] px-2 mb-1.5"
+              style={{ color: "rgba(255,255,255,0.22)" }}
             >
               {section}
             </div>
@@ -66,26 +86,27 @@ export default function Sidebar() {
               <a
                 key={label}
                 href="#"
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] transition-all duration-150"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150 mb-px"
                 style={{
-                  color: active ? "#6ecfc3" : "rgba(255,255,255,0.5)",
-                  background: active ? "rgba(59,158,149,0.2)" : "transparent",
+                  color:      active ? "#6ecfc3" : "rgba(255,255,255,0.46)",
+                  background: active ? "rgba(59,158,149,0.18)" : "transparent",
                   textDecoration: "none",
+                  fontWeight: active ? 500 : 400,
                 }}
                 onMouseEnter={e => {
                   if (!active) {
-                    (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)";
-                    (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.75)";
+                    (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.05)";
+                    (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.7)";
                   }
                 }}
                 onMouseLeave={e => {
                   if (!active) {
-                    (e.currentTarget as HTMLElement).style.background = "transparent";
-                    (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.5)";
+                    (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+                    (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.46)";
                   }
                 }}
               >
-                <Icon size={16} />
+                <Icon size={15} strokeWidth={1.75} />
                 {label}
               </a>
             ))}
@@ -94,15 +115,22 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="mt-auto">
+      <div className="px-3 pb-6">
+        <div style={{ height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 12 }} />
         <a
           href="#"
-          className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] transition-all duration-150"
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150"
           style={{ color: "rgba(255,255,255,0.28)", textDecoration: "none" }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.05)";
+            (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.6)";
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+            (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.28)";
+          }}
         >
-          <IconSettings size={16} />
+          <IconSettings size={15} strokeWidth={1.75} />
           Settings
         </a>
       </div>

@@ -1,91 +1,108 @@
 "use client";
 
-import { IconWind, IconDroplet, IconBug, IconFlame, IconPlus } from "@tabler/icons-react";
+import { IconTool, IconWind, IconDroplet, IconBug, IconFlame, IconPlus } from "@tabler/icons-react";
 
 type Status = "overdue" | "pending" | "done" | "upcoming";
 
-const statusStyles: Record<Status, { badge: { bg: string; color: string }; icon: { bg: string; color: string } }> = {
-  overdue:  { badge: { bg: "rgba(185,50,40,0.12)",   color: "#b93228" }, icon: { bg: "rgba(185,50,40,0.12)",   color: "#b93228" } },
-  pending:  { badge: { bg: "rgba(192,128,64,0.18)",  color: "#7a4e10" }, icon: { bg: "rgba(192,128,64,0.18)",  color: "#7a4e10" } },
-  done:     { badge: { bg: "rgba(59,158,149,0.14)",  color: "#1a6b64" }, icon: { bg: "rgba(59,158,149,0.14)",  color: "#1a6b64" } },
-  upcoming: { badge: { bg: "#f0ede8",                color: "#9e9b93" }, icon: { bg: "#f0ede8",                color: "#9e9b93" } },
+const STATUS_STYLE: Record<Status, { badge: [string, string]; icon: [string, string] }> = {
+  overdue:  { badge: ["rgba(185,50,40,0.1)",  "#b93228"], icon: ["rgba(185,50,40,0.1)",  "#b93228"] },
+  pending:  { badge: ["rgba(192,128,64,0.13)","#7a4e10"], icon: ["rgba(192,128,64,0.13)","#7a4e10"] },
+  done:     { badge: ["rgba(59,158,149,0.1)", "#16645d"], icon: ["rgba(59,158,149,0.1)", "#16645d"] },
+  upcoming: { badge: ["#f0ede8",              "#9e9b93"], icon: ["#f0ede8",              "#9e9b93"] },
 };
 
-const statusLabels: Record<Status, string> = {
+const LABEL: Record<Status, string> = {
   overdue: "Overdue", pending: "Pending", done: "Done", upcoming: "Upcoming",
 };
 
-const items = [
-  { icon: IconWind,   title: "HVAC filter replacement", meta: "Due Jul 28 · Quarterly",       status: "overdue"  as Status },
-  { icon: IconDroplet,title: "Outdoor shower caulk",    meta: "Added Aug 3 · Unassigned",     status: "pending"  as Status },
-  { icon: IconBug,    title: "Pest control visit",      meta: "Completed Aug 2 · $85",         status: "done"     as Status },
-  { icon: IconFlame,  title: "Fire pit inspection",     meta: "Scheduled Sep 1 · Before fall", status: "upcoming" as Status },
+const ITEMS = [
+  { Icon: IconWind,    title: "HVAC filter replacement", meta: "Due Jul 28 · Quarterly",        status: "overdue"  as Status },
+  { Icon: IconDroplet, title: "Outdoor shower caulk",   meta: "Added Aug 3 · Unassigned",      status: "pending"  as Status },
+  { Icon: IconBug,     title: "Pest control visit",     meta: "Completed Aug 2 · $85",          status: "done"     as Status },
+  { Icon: IconFlame,   title: "Fire pit inspection",    meta: "Scheduled Sep 1 · Before fall",  status: "upcoming" as Status },
 ];
 
 export default function MaintenanceCard() {
   return (
-    <div className="rounded-xl p-[1.1rem_1.25rem]" style={{ background: "#fff", border: "1px solid #eae8e2" }}>
+    <div
+      className="flex flex-col rounded-xl"
+      style={{ background: "#fff", border: "1px solid #e6e4de" }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between mb-[0.875rem]">
-        <div className="flex items-center gap-1.5 text-[13.5px] font-semibold" style={{ color: "#1c1c1a" }}>
-          <IconWind size={16} style={{ color: "#3b9e95" }} /> Maintenance
+      <div
+        className="flex items-center justify-between px-5 py-4"
+        style={{ borderBottom: "1px solid #f0efe9" }}
+      >
+        <div className="flex items-center gap-2 text-[13.5px] font-semibold" style={{ color: "#1c1c1a" }}>
+          <IconTool size={15} style={{ color: "#3b9e95" }} strokeWidth={2} />
+          Maintenance
         </div>
         <button
-          className="text-[12px] font-medium px-[10px] py-1 rounded-full transition-colors duration-150"
-          style={{ color: "#3b9e95", background: "rgba(59,158,149,0.14)", border: "none", cursor: "pointer" }}
-          onMouseEnter={e => (e.currentTarget.style.background = "rgba(59,158,149,0.28)")}
-          onMouseLeave={e => (e.currentTarget.style.background = "rgba(59,158,149,0.14)")}
+          className="text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors duration-150"
+          style={{ color: "#3b9e95", background: "rgba(59,158,149,0.1)", border: "none", cursor: "pointer" }}
+          onMouseEnter={e => (e.currentTarget.style.background = "rgba(59,158,149,0.2)")}
+          onMouseLeave={e => (e.currentTarget.style.background = "rgba(59,158,149,0.1)")}
         >
           View all
         </button>
       </div>
 
       {/* List */}
-      <div className="flex flex-col">
-        {items.map(({ icon: Icon, title, meta, status }, idx) => {
-          const s = statusStyles[status];
+      <div className="flex flex-col flex-1 px-5 pt-2 pb-4">
+        {ITEMS.map(({ Icon, title, meta, status }, idx) => {
+          const { badge, icon } = STATUS_STYLE[status];
           return (
             <div
               key={title}
-              className="flex items-center gap-2.5 py-[9px]"
-              style={{ borderBottom: idx < items.length - 1 ? "1px solid #eae8e2" : "none" }}
+              className="flex items-center gap-3 py-3"
+              style={{ borderBottom: idx < ITEMS.length - 1 ? "1px solid #f0efe9" : "none" }}
             >
+              {/* Icon chip */}
               <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: s.icon.bg, color: s.icon.color }}
+                className="flex items-center justify-center rounded-lg flex-shrink-0"
+                style={{ width: 32, height: 32, background: icon[0], color: icon[1] }}
               >
-                <Icon size={15} />
+                <Icon size={14} strokeWidth={2} />
               </div>
-              <div className="flex-1">
-                <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>{title}</div>
-                <div className="text-[11px] mt-px" style={{ color: "#9e9b93" }}>{meta}</div>
+
+              {/* Text */}
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>
+                  {title}
+                </div>
+                <div className="text-[11px] mt-0.5" style={{ color: "#9e9b93" }}>
+                  {meta}
+                </div>
               </div>
+
+              {/* Badge */}
               <span
-                className="text-[10.5px] font-medium px-[9px] py-[3px] rounded-full whitespace-nowrap"
-                style={{ background: s.badge.bg, color: s.badge.color }}
+                className="text-[10.5px] font-medium px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0"
+                style={{ background: badge[0], color: badge[1] }}
               >
-                {statusLabels[status]}
+                {LABEL[status]}
               </span>
             </div>
           );
         })}
-      </div>
 
-      {/* Add button */}
-      <button
-        className="flex items-center justify-center gap-[5px] w-full mt-[10px] py-2 text-[12.5px] rounded-lg transition-colors duration-150"
-        style={{
-          color: "#3b9e95",
-          border: "1.5px dashed rgba(59,158,149,0.4)",
-          background: "none",
-          cursor: "pointer",
-          fontFamily: "var(--font-inter), sans-serif",
-        }}
-        onMouseEnter={e => (e.currentTarget.style.background = "rgba(59,158,149,0.14)")}
-        onMouseLeave={e => (e.currentTarget.style.background = "none")}
-      >
-        <IconPlus size={13} /> Log a task
-      </button>
+        {/* Add task button */}
+        <button
+          className="flex items-center justify-center gap-1.5 w-full mt-3 py-2 text-[12.5px] rounded-lg transition-colors duration-150"
+          style={{
+            color: "#3b9e95",
+            border: "1.5px dashed rgba(59,158,149,0.35)",
+            background: "none",
+            cursor: "pointer",
+            fontFamily: "var(--font-inter), sans-serif",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "rgba(59,158,149,0.06)")}
+          onMouseLeave={e => (e.currentTarget.style.background = "none")}
+        >
+          <IconPlus size={13} strokeWidth={2} />
+          Log a task
+        </button>
+      </div>
     </div>
   );
 }

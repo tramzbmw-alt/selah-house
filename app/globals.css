@@ -1,21 +1,16 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-teal:         #3b9e95;
-  --color-teal-light:   rgba(59,158,149,0.14);
-  --color-teal-mid:     rgba(59,158,149,0.28);
-  --color-amber-house:  #c08040;
-  --color-amber-light:  rgba(192,128,64,0.18);
-  --color-red-house:    #b93228;
-  --color-red-light:    rgba(185,50,40,0.12);
-  --color-sidebar:      #152f2d;
-  --color-surface:      #ffffff;
-  --color-surface-2:    #f5f4f1;
-  --color-border:       #e4e2dc;
-  --color-text:         #1c1c1a;
-  --color-text-2:       #6b6960;
-  --color-text-3:       #9e9b93;
-  --color-page-bg:      #eeece8;
+  --color-teal:        #3b9e95;
+  --color-amber:       #c08040;
+  --color-red-alert:   #b93228;
+  --color-sidebar:     #1a3d3a;
+  --color-surface:     #ffffff;
+  --color-base:        #f4f3f0;
+  --color-border:      #e6e4de;
+  --color-ink:         #1c1c1a;
+  --color-ink-2:       #6b6960;
+  --color-ink-3:       #9e9b93;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,7 +22,7 @@ html, body {
 
 body {
   font-family: var(--font-inter), 'Inter', sans-serif;
-  background: #f5f4f1;
+  background: #f4f3f0;
   color: #1c1c1a;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

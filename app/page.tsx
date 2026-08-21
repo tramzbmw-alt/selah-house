@@ -10,16 +10,18 @@ export default function Dashboard() {
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar />
 
-      <div className="flex flex-col flex-1 min-w-0" style={{ background: "#f5f4f1" }}>
-        {/* Teal door accent */}
+      {/* Right panel */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ background: "#f4f3f0" }}>
+        {/* Teal accent line */}
         <div style={{ height: 3, background: "#3b9e95", flexShrink: 0 }} />
 
         <Topbar />
 
-        <main className="flex flex-col gap-[1.25rem] p-[1.5rem_1.75rem] flex-1 overflow-y-auto">
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
           <StatsRow />
           <HouseFacts />
-          <div className="grid grid-cols-2 gap-[1.25rem]">
+          <div className="grid grid-cols-2 gap-5 flex-1 min-h-0">
             <OccupancyCalendar />
             <MaintenanceCard />
           </div>
