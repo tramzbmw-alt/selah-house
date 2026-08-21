@@ -18,7 +18,8 @@ export default function StatsRow() {
       {STATS.map(({ label, value, sub, dot }) => (
         <div
           key={label}
-          className="bg-white border border-[#e4e2dc] rounded-xl p-5 flex flex-col items-center text-center"
+          className="bg-white border border-[#e4e2dc] rounded-xl flex flex-col items-center text-center"
+          style={{ padding: '20px' }}
         >
           <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] mb-3" style={{ color: "#9e9b93" }}>
             {label}

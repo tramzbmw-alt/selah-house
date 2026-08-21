@@ -24,7 +24,7 @@ export default function OccupancyCalendar() {
   const days    = Array.from({ length: TOTAL_DAYS }, (_, i) => i + 1);
 
   return (
-    <div className="bg-white border border-[#e4e2dc] rounded-xl p-5 flex flex-col">
+    <div className="bg-white border border-[#e4e2dc] rounded-xl flex flex-col" style={{ padding: '20px' }}>
       {/* Card head */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-[13.5px] font-semibold" style={{ color: "#1c1c1a" }}>
