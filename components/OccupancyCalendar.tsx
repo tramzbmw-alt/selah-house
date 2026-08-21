@@ -24,15 +24,9 @@ export default function OccupancyCalendar() {
   const days    = Array.from({ length: TOTAL_DAYS }, (_, i) => i + 1);
 
   return (
-    <div
-      className="flex flex-col rounded-xl"
-      style={{ background: "#fff", border: "1px solid #e6e4de" }}
-    >
-      {/* Card header */}
-      <div
-        className="flex items-center justify-between px-5 py-4"
-        style={{ borderBottom: "1px solid #f0efe9", flexShrink: 0 }}
-      >
+    <div className="bg-white border border-[#e4e2dc] rounded-xl p-5 flex flex-col">
+      {/* Card head */}
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-[13.5px] font-semibold" style={{ color: "#1c1c1a" }}>
           <IconCalendarEvent size={15} style={{ color: "#3b9e95" }} strokeWidth={2} />
           Occupancy
@@ -47,93 +41,69 @@ export default function OccupancyCalendar() {
         </button>
       </div>
 
-      {/* Calendar body — fills remaining card space, no centering constraint */}
-      <div className="flex flex-col flex-1 px-5 py-5">
-        {/* Month nav — full width */}
-        <div className="flex items-center justify-between w-full mb-4">
-          <span className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>August 2026</span>
-          <div className="flex gap-1">
-            {[IconChevronLeft, IconChevronRight].map((Icon, i) => (
-              <button
-                key={i}
-                className="flex items-center justify-center rounded transition-colors duration-150"
-                style={{
-                  width: 24, height: 24,
-                  border: "1px solid #e6e4de",
-                  background: "none",
-                  cursor: "pointer",
-                  color: "#6b6960",
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = "#f4f3f0")}
-                onMouseLeave={e => (e.currentTarget.style.background = "none")}
-              >
-                <Icon size={13} strokeWidth={2} />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Grid — 1fr columns fill the full card width, 44px cell height */}
-        <div
-          className="w-full"
-          style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}
-        >
-          {/* Day-of-week headers */}
-          {DOW.map(d => (
-            <div
-              key={d}
-              className="flex items-center justify-center text-[10px] font-medium uppercase tracking-[0.05em]"
-              style={{ height: 28, color: "#9e9b93" }}
+      {/* Month nav */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>August 2026</span>
+        <div className="flex gap-1">
+          {[IconChevronLeft, IconChevronRight].map((Icon, i) => (
+            <button
+              key={i}
+              className="flex items-center justify-center rounded transition-colors duration-150"
+              style={{ width: 24, height: 24, border: "1px solid #e4e2dc", background: "none", cursor: "pointer", color: "#6b6960" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#f4f3f0")}
+              onMouseLeave={e => (e.currentTarget.style.background = "none")}
             >
-              {d}
-            </div>
+              <Icon size={13} strokeWidth={2} />
+            </button>
           ))}
-
-          {/* Empty leading cells */}
-          {empties.map((_, i) => (
-            <div key={`e${i}`} style={{ height: 44 }} />
-          ))}
-
-          {/* Day cells */}
-          {days.map(day => {
-            const s       = getDayStyle(day);
-            const isToday = day === TODAY;
-            return (
-              <div
-                key={day}
-                className="flex items-center justify-center rounded-md text-[12px] cursor-pointer transition-opacity duration-100 hover:opacity-75"
-                style={{
-                  height:     44,
-                  background: s.bg,
-                  color:      s.color,
-                  border:     isToday ? "2px solid #3b9e95" : (s.border ?? "none"),
-                  fontWeight: isToday ? 600 : (s.fontWeight ?? 400),
-                }}
-              >
-                {day}
-              </div>
-            );
-          })}
         </div>
+      </div>
 
-        {/* Legend — full width */}
-        <div
-          className="flex items-center gap-4 w-full mt-4 pt-4"
-          style={{ borderTop: "1px solid #f0efe9" }}
-        >
-          {[
-            { label: "Travis", bg: "rgba(59,158,149,0.13)", border: "1px solid rgba(59,158,149,0.22)" },
-            { label: "Briana", bg: "rgba(192,128,64,0.15)", border: "1px solid rgba(192,128,64,0.22)" },
-          ].map(({ label, bg, border }) => (
-            <div key={label} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "#6b6960" }}>
-              <span className="rounded" style={{ width: 10, height: 10, background: bg, border, display: "inline-block" }} />
-              {label}
+      {/* Calendar grid — 1fr columns fill full card width */}
+      <div className="w-full" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+        {DOW.map(d => (
+          <div
+            key={d}
+            className="flex items-center justify-center text-[10px] font-medium uppercase tracking-[0.05em]"
+            style={{ height: 26, color: "#9e9b93" }}
+          >
+            {d}
+          </div>
+        ))}
+        {empties.map((_, i) => <div key={`e${i}`} style={{ height: 44 }} />)}
+        {days.map(day => {
+          const s       = getDayStyle(day);
+          const isToday = day === TODAY;
+          return (
+            <div
+              key={day}
+              className="flex items-center justify-center rounded-md text-[12px] cursor-pointer hover:opacity-75 transition-opacity duration-100"
+              style={{
+                height:     44,
+                background: s.bg,
+                color:      s.color,
+                border:     isToday ? "2px solid #3b9e95" : (s.border ?? "none"),
+                fontWeight: isToday ? 600 : (s.fontWeight ?? 400),
+              }}
+            >
+              {day}
             </div>
-          ))}
-          <span className="ml-auto text-[10.5px]" style={{ color: "#9e9b93" }}>
-            Click a day to claim it
-          </span>
-        </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-4 pt-4" style={{ borderTop: "1px solid #e4e2dc" }}>
+        {[
+          { label: "Travis", bg: "rgba(59,158,149,0.13)", border: "1px solid rgba(59,158,149,0.22)" },
+          { label: "Briana", bg: "rgba(192,128,64,0.15)", border: "1px solid rgba(192,128,64,0.22)" },
+        ].map(({ label, bg, border }) => (
+          <div key={label} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "#6b6960" }}>
+            <span className="rounded" style={{ width: 10, height: 10, background: bg, border, display: "inline-block" }} />
+            {label}
+          </div>
+        ))}
+        <span className="ml-auto text-[10.5px]" style={{ color: "#9e9b93" }}>Click a day to claim it</span>
       </div>
     </div>
   );

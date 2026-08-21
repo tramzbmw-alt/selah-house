@@ -8,12 +8,11 @@ const FACTS = [
 
 export default function HouseFacts() {
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-4">
       {FACTS.map(({ icon, val, sub }) => (
         <div
           key={val}
-          className="flex-1 flex flex-col items-center justify-center text-center rounded-xl py-4 px-3"
-          style={{ background: "#fff", border: "1px solid #e6e4de" }}
+          className="flex-1 bg-white border border-[#e4e2dc] rounded-xl p-5 flex flex-col items-center justify-center text-center"
         >
           <span className="text-[20px] leading-none mb-2">{icon}</span>
           <div className="text-[12.5px] font-medium" style={{ color: "#1c1c1a" }}>{val}</div>
