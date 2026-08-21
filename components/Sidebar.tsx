@@ -29,7 +29,7 @@ const navItems = [
 
 export default function Sidebar() {
   return (
-    <aside style={{ background: "#152f2d" }} className="flex flex-col gap-7 px-4 py-7 min-h-full">
+    <aside style={{ background: "#152f2d", width: 230, flexShrink: 0 }} className="flex flex-col gap-7 px-4 py-7 h-full overflow-y-auto">
       {/* Logo */}
       <div className="px-2">
         <div
