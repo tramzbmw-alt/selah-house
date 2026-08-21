@@ -43,7 +43,7 @@ export default function Sidebar() {
       style={{ width: 220, flexShrink: 0, background: "#1a3d3a" }}
     >
       {/* Logo — centered */}
-      <div className="flex flex-col items-center text-center px-4 pt-8 pb-6">
+      <div className="flex flex-col items-center text-center px-4" style={{ paddingTop: '24px', paddingBottom: '24px' }}>
         <div
           className="flex items-center justify-center text-xl rounded-xl mb-3"
           style={{ width: 42, height: 42, background: "#3b9e95" }}
@@ -75,10 +75,10 @@ export default function Sidebar() {
       {/* Nav */}
       <nav
         className="flex flex-col flex-1"
-        style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '16px' }}
+        style={{ paddingLeft: '12px', paddingRight: '12px', paddingTop: '8px' }}
       >
         {NAV.map(({ section, items }, idx) => (
-          <div key={section} style={{ marginTop: idx > 0 ? '32px' : '0' }}>
+          <div key={section} style={{ marginTop: idx > 0 ? '24px' : '0' }}>
             <div
               className="text-[10px] uppercase tracking-[0.1em] mb-2"
               style={{ color: "rgba(255,255,255,0.22)" }}

@@ -12,12 +12,15 @@ export default function Dashboard() {
 
       <div
           className="flex flex-col flex-1 min-w-0 overflow-hidden"
-          style={{ background: "#f4f3f0", padding: '24px', boxSizing: 'border-box' }}
+          style={{ background: "#f5f4f1" }}
         >
         <div style={{ height: 3, background: "#3b9e95", flexShrink: 0 }} />
         <Topbar />
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-4">
+        <main
+          className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-4"
+          style={{ background: "#f5f4f1", padding: '24px', boxSizing: 'border-box' }}
+        >
           <StatsRow />
           <HouseFacts />
           <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
