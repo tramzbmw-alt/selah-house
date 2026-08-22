@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { IconUsers, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
+import { IconUsers, IconPlus, IconTrash, IconX, IconPencil } from "@tabler/icons-react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
-import { usePeople, type GuestType } from "@/context/PeopleContext";
-import { type Person } from "@/context/StaysContext";
-import { TRAVIS, BRIANA } from "@/lib/stayUtils";
+import { usePeople, type GuestType, type OwnerAssoc, type PersonEntry } from "@/context/PeopleContext";
+import { TRAVIS, BRIANA, BOTH } from "@/lib/stayUtils";
 
 const INPUT_STYLE = {
   width: "100%", padding: "8px 12px", border: "1px solid #e4e2dc",
@@ -16,42 +15,68 @@ const INPUT_STYLE = {
   boxSizing: "border-box" as const,
 };
 
-export default function PeoplePage() {
-  const { people, addPerson, removePerson } = usePeople();
+const OWNER_OPTIONS: { value: OwnerAssoc | ""; label: string }[] = [
+  { value: "Travis", label: "Travis" },
+  { value: "Briana", label: "Briana" },
+  { value: "Both",   label: "Both"   },
+  { value: "",       label: "Neither" },
+];
 
-  const [showForm,  setShowForm]  = useState(false);
-  const [guestType, setGuestType] = useState<GuestType>("owner");
-  const [name,      setName]      = useState("");
-  const [rel,       setRel]       = useState("");
-  const [owner,     setOwner]     = useState<Person | "">("");
-  const [rate,      setRate]      = useState("");
+function ownerColors(owner: OwnerAssoc | undefined) {
+  if (owner === "Travis") return { bg: TRAVIS.bg, text: TRAVIS.text, avatarBg: TRAVIS.bg, avatarColor: TRAVIS.text };
+  if (owner === "Briana") return { bg: BRIANA.bg, text: BRIANA.text, avatarBg: BRIANA.bg, avatarColor: BRIANA.text };
+  if (owner === "Both")   return { bg: BOTH.bg,   text: BOTH.text,   avatarBg: BOTH.bg,   avatarColor: BOTH.text   };
+  return { bg: "#f0ede8", text: "#6b6960", avatarBg: "#f0ede8", avatarColor: "#6b6960" };
+}
+
+export default function PeoplePage() {
+  const { people, addPerson, updatePerson, removePerson } = usePeople();
+
+  const [showForm,   setShowForm]   = useState(false);
+  const [editingId,  setEditingId]  = useState<string | null>(null);
+  const [guestType,  setGuestType]  = useState<GuestType>("owner");
+  const [name,       setName]       = useState("");
+  const [rel,        setRel]        = useState("");
+  const [owner,      setOwner]      = useState<OwnerAssoc | "">("");
+  const [rate,       setRate]       = useState("");
 
   const ownerGuests = people.filter(p => p.type === "owner");
   const paidGuests  = people.filter(p => p.type === "paid");
 
-  function handleAdd() {
+  function openAddForm() {
+    setEditingId(null);
+    setGuestType("owner");
+    setName(""); setRel(""); setOwner(""); setRate("");
+    setShowForm(true);
+  }
+
+  function openEditForm(p: PersonEntry) {
+    setEditingId(p.id);
+    setGuestType(p.type);
+    setName(p.name);
+    setRel(p.relationship ?? "");
+    setOwner(p.owner ?? "");
+    setRate(p.rate != null ? String(p.rate) : "");
+    setShowForm(true);
+  }
+
+  function handleSubmit() {
     if (!name.trim()) return;
-    if (guestType === "owner") {
-      addPerson({
-        type: "owner",
-        name: name.trim(),
-        relationship: rel.trim() || undefined,
-        owner: owner || undefined,
-      });
-    } else {
-      addPerson({
-        type: "paid",
-        name: name.trim(),
-        rate: rate ? parseFloat(rate) : undefined,
-      });
-    }
+    const data = guestType === "owner"
+      ? { type: "owner" as const, name: name.trim(), relationship: rel.trim() || undefined, owner: (owner || undefined) as OwnerAssoc | undefined }
+      : { type: "paid" as const,  name: name.trim(), rate: rate ? parseFloat(rate) : undefined };
+
+    if (editingId) updatePerson(editingId, data);
+    else           addPerson(data);
     resetForm();
   }
 
   function resetForm() {
-    setName(""); setRel(""); setOwner(""); setRate("");
-    setGuestType("owner"); setShowForm(false);
+    setShowForm(false); setEditingId(null);
+    setName(""); setRel(""); setOwner(""); setRate(""); setGuestType("owner");
   }
+
+  const isEditing = !!editingId;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -72,11 +97,11 @@ export default function PeoplePage() {
               </div>
               {!showForm && (
                 <button
-                  className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors duration-150"
+                  className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-full"
                   style={{ color: "#3b9e95", background: "rgba(59,158,149,0.1)", border: "none", cursor: "pointer" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "rgba(59,158,149,0.2)")}
                   onMouseLeave={e => (e.currentTarget.style.background = "rgba(59,158,149,0.1)")}
-                  onClick={() => setShowForm(true)}
+                  onClick={openAddForm}
                 >
                   <IconPlus size={12} strokeWidth={2.5} />
                   Add person
@@ -84,11 +109,13 @@ export default function PeoplePage() {
               )}
             </div>
 
-            {/* Add form */}
+            {/* Form */}
             {showForm && (
               <div className="rounded-xl mb-5" style={{ padding: "16px", background: "#f9f8f6", border: "1px solid #e4e2dc" }}>
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[12.5px] font-medium" style={{ color: "#1c1c1a" }}>New person</span>
+                  <span className="text-[12.5px] font-medium" style={{ color: "#1c1c1a" }}>
+                    {isEditing ? "Edit person" : "New person"}
+                  </span>
                   <button
                     onClick={resetForm}
                     className="flex items-center justify-center rounded-full"
@@ -123,7 +150,7 @@ export default function PeoplePage() {
                     onChange={e => setName(e.target.value)}
                     placeholder="Name"
                     autoFocus
-                    onKeyDown={e => e.key === "Enter" && handleAdd()}
+                    onKeyDown={e => e.key === "Enter" && handleSubmit()}
                     style={INPUT_STYLE}
                   />
 
@@ -134,27 +161,27 @@ export default function PeoplePage() {
                         value={rel}
                         onChange={e => setRel(e.target.value)}
                         placeholder="Relationship (e.g. Travis's sister)"
-                        onKeyDown={e => e.key === "Enter" && handleAdd()}
+                        onKeyDown={e => e.key === "Enter" && handleSubmit()}
                         style={INPUT_STYLE}
                       />
-                      {/* Owner association */}
                       <div>
                         <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] mb-1.5" style={{ color: "#9e9b93" }}>Associated with</div>
-                        <div className="flex gap-2">
-                          {(["Travis", "Briana", ""] as const).map(o => {
-                            const c = o === "Travis" ? TRAVIS : o === "Briana" ? BRIANA : null;
+                        <div className="flex gap-1.5">
+                          {OWNER_OPTIONS.map(({ value: val, label }) => {
+                            const c = val === "Travis" ? TRAVIS : val === "Briana" ? BRIANA : val === "Both" ? BOTH : null;
+                            const active = owner === val;
                             return (
                               <button
-                                key={o || "none"}
-                                className="flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-150"
+                                key={label}
+                                className="flex-1 py-1.5 rounded-lg text-[11.5px] font-medium transition-all duration-150"
                                 style={{
                                   border: "none", cursor: "pointer",
-                                  background: owner === o ? (c?.bg ?? "#e4e2dc") : "#ede9e3",
-                                  color:      owner === o ? (c?.text ?? "#1c1c1a") : "#6b6960",
+                                  background: active ? (c?.bg ?? "#e4e2dc") : "#ede9e3",
+                                  color:      active ? (c?.text ?? "#1c1c1a") : "#6b6960",
                                 }}
-                                onClick={() => setOwner(o)}
+                                onClick={() => setOwner(val)}
                               >
-                                {o || "Neither"}
+                                {label}
                               </button>
                             );
                           })}
@@ -170,7 +197,7 @@ export default function PeoplePage() {
                         value={rate}
                         onChange={e => setRate(e.target.value)}
                         placeholder="Rate per night (optional)"
-                        onKeyDown={e => e.key === "Enter" && handleAdd()}
+                        onKeyDown={e => e.key === "Enter" && handleSubmit()}
                         style={{ ...INPUT_STYLE, paddingLeft: 26 }}
                       />
                     </div>
@@ -191,53 +218,54 @@ export default function PeoplePage() {
                         color: "#fff", border: "none",
                         cursor: name.trim() ? "pointer" : "not-allowed",
                       }}
-                      onClick={handleAdd}
+                      onClick={handleSubmit}
                     >
-                      Add
+                      {isEditing ? "Save" : "Add"}
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Owner Guests section */}
-            <Section
-              title="Owner Guests"
-              subtitle="Free stays — count against owner allocation"
-              empty="No owner guests yet."
-            >
-              {ownerGuests.map(({ id, name, relationship, owner }, idx) => (
-                <PersonRow
-                  key={id}
-                  initials={name.slice(0, 2).toUpperCase()}
-                  avatarBg={owner === "Travis" ? TRAVIS.bg : owner === "Briana" ? BRIANA.bg : "#f0ede8"}
-                  avatarColor={owner === "Travis" ? TRAVIS.text : owner === "Briana" ? BRIANA.text : "#6b6960"}
-                  name={name}
-                  sub={[relationship, owner ? `${owner}'s guest` : ""].filter(Boolean).join(" · ")}
-                  isLast={idx === ownerGuests.length - 1}
-                  onRemove={() => removePerson(id)}
-                />
-              ))}
+            {/* Owner Guests */}
+            <Section title="Owner Guests" subtitle="Free stays — count against owner allocation" empty="No owner guests yet.">
+              {ownerGuests.map((p, idx) => {
+                const c = ownerColors(p.owner);
+                const sub = [
+                  p.relationship,
+                  p.owner ? `${p.owner}'s guest` : undefined,
+                ].filter(Boolean).join(" · ");
+                return (
+                  <PersonRow
+                    key={p.id}
+                    initials={p.name.slice(0, 2).toUpperCase()}
+                    avatarBg={c.avatarBg}
+                    avatarColor={c.avatarColor}
+                    name={p.name}
+                    sub={sub}
+                    isLast={idx === ownerGuests.length - 1}
+                    onEdit={() => openEditForm(p)}
+                    onRemove={() => removePerson(p.id)}
+                  />
+                );
+              })}
             </Section>
 
             <div style={{ height: 1, background: "#f0ede8", margin: "20px 0" }} />
 
-            {/* Paid Guests section */}
-            <Section
-              title="Paid Guests"
-              subtitle="Independent stays — not counted against owner allocation"
-              empty="No paid guests yet."
-            >
-              {paidGuests.map(({ id, name, rate }, idx) => (
+            {/* Paid Guests */}
+            <Section title="Paid Guests" subtitle="Independent stays — not counted against owner allocation" empty="No paid guests yet.">
+              {paidGuests.map((p, idx) => (
                 <PersonRow
-                  key={id}
-                  initials={name.slice(0, 2).toUpperCase()}
+                  key={p.id}
+                  initials={p.name.slice(0, 2).toUpperCase()}
                   avatarBg="rgba(201,168,76,0.15)"
                   avatarColor="#7a5e10"
-                  name={name}
-                  sub={rate ? `$${rate}/night` : "Rate varies"}
+                  name={p.name}
+                  sub={p.rate ? `$${p.rate}/night` : "Rate varies"}
                   isLast={idx === paidGuests.length - 1}
-                  onRemove={() => removePerson(id)}
+                  onEdit={() => openEditForm(p)}
+                  onRemove={() => removePerson(p.id)}
                 />
               ))}
             </Section>
@@ -250,41 +278,27 @@ export default function PeoplePage() {
 }
 
 function Section({ title, subtitle, empty, children }: {
-  title: string;
-  subtitle: string;
-  empty: string;
-  children: React.ReactNode;
+  title: string; subtitle: string; empty: string; children: React.ReactNode;
 }) {
-  const hasChildren = Array.isArray(children) ? children.length > 0 : !!children;
+  const hasChildren = Array.isArray(children) ? children.some(Boolean) : !!children;
   return (
     <div>
       <div className="mb-3">
         <div className="text-[12.5px] font-semibold" style={{ color: "#1c1c1a" }}>{title}</div>
         <div className="text-[11px] mt-0.5" style={{ color: "#9e9b93" }}>{subtitle}</div>
       </div>
-      {hasChildren ? (
-        <div className="flex flex-col">{children}</div>
-      ) : (
-        <div className="text-[12.5px] py-4" style={{ color: "#9e9b93" }}>{empty}</div>
-      )}
+      {hasChildren ? <div className="flex flex-col">{children}</div> : <div className="text-[12.5px] py-4" style={{ color: "#9e9b93" }}>{empty}</div>}
     </div>
   );
 }
 
-function PersonRow({ initials, avatarBg, avatarColor, name, sub, isLast, onRemove }: {
-  initials: string;
-  avatarBg: string;
-  avatarColor: string;
-  name: string;
-  sub: string;
-  isLast: boolean;
-  onRemove: () => void;
+function PersonRow({ initials, avatarBg, avatarColor, name, sub, isLast, onEdit, onRemove }: {
+  initials: string; avatarBg: string; avatarColor: string;
+  name: string; sub: string; isLast: boolean;
+  onEdit: () => void; onRemove: () => void;
 }) {
   return (
-    <div
-      className="flex items-center gap-3 py-3"
-      style={{ borderBottom: isLast ? "none" : "1px solid #f0ede8" }}
-    >
+    <div className="flex items-center gap-3 py-3" style={{ borderBottom: isLast ? "none" : "1px solid #f0ede8" }}>
       <div
         className="flex items-center justify-center rounded-full flex-shrink-0 text-[11px] font-semibold"
         style={{ width: 32, height: 32, background: avatarBg, color: avatarColor }}
@@ -295,15 +309,28 @@ function PersonRow({ initials, avatarBg, avatarColor, name, sub, isLast, onRemov
         <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>{name}</div>
         {sub && <div className="text-[11.5px] mt-0.5" style={{ color: "#9e9b93" }}>{sub}</div>}
       </div>
-      <button
-        className="flex items-center justify-center rounded-lg flex-shrink-0"
-        style={{ width: 28, height: 28, background: "none", border: "none", cursor: "pointer", color: "#c8c5bf" }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(185,50,40,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#b93228"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "#c8c5bf"; }}
-        onClick={onRemove}
-      >
-        <IconTrash size={13} strokeWidth={2} />
-      </button>
+      <div className="flex gap-1 flex-shrink-0">
+        <button
+          className="flex items-center justify-center rounded-lg"
+          style={{ width: 28, height: 28, background: "none", border: "none", cursor: "pointer", color: "#c8c5bf" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "#f0ede8"; (e.currentTarget as HTMLButtonElement).style.color = "#6b6960"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "#c8c5bf"; }}
+          onClick={onEdit}
+          title="Edit"
+        >
+          <IconPencil size={13} strokeWidth={2} />
+        </button>
+        <button
+          className="flex items-center justify-center rounded-lg"
+          style={{ width: 28, height: 28, background: "none", border: "none", cursor: "pointer", color: "#c8c5bf" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(185,50,40,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#b93228"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "#c8c5bf"; }}
+          onClick={onRemove}
+          title="Remove"
+        >
+          <IconTrash size={13} strokeWidth={2} />
+        </button>
+      </div>
     </div>
   );
 }

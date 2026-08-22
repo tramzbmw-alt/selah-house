@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode } from "react";
-import type { Person } from "./StaysContext";
 
-export type GuestType = "owner" | "paid";
+export type GuestType  = "owner" | "paid";
+export type OwnerAssoc = "Travis" | "Briana" | "Both";
 
 export type PersonEntry = {
   id: string;
@@ -11,7 +11,7 @@ export type PersonEntry = {
   type: GuestType;
   // owner guest fields
   relationship?: string;
-  owner?: Person;
+  owner?: OwnerAssoc;
   // paid guest fields
   rate?: number; // per-night rate; undefined = varies / ask each time
 };
@@ -19,6 +19,7 @@ export type PersonEntry = {
 type PeopleCtx = {
   people: PersonEntry[];
   addPerson: (p: Omit<PersonEntry, "id">) => void;
+  updatePerson: (id: string, p: Omit<PersonEntry, "id">) => void;
   removePerson: (id: string) => void;
 };
 
@@ -37,10 +38,13 @@ export function PeopleProvider({ children }: { children: ReactNode }) {
   const addPerson = (p: Omit<PersonEntry, "id">) =>
     setPeople(prev => [...prev, { ...p, id: crypto.randomUUID() }]);
 
+  const updatePerson = (id: string, p: Omit<PersonEntry, "id">) =>
+    setPeople(prev => prev.map(pe => pe.id === id ? { ...p, id } : pe));
+
   const removePerson = (id: string) =>
     setPeople(prev => prev.filter(p => p.id !== id));
 
-  return <Ctx.Provider value={{ people, addPerson, removePerson }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ people, addPerson, updatePerson, removePerson }}>{children}</Ctx.Provider>;
 }
 
 export function usePeople() {

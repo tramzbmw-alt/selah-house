@@ -6,6 +6,7 @@ import { getUpcomingStays, formatShortDate } from "@/lib/stayUtils";
 const DOT: Record<string, string> = {
   travis: "#c08040",
   briana: "#3b9e95",
+  both:   "#7FA882",
   paid:   "#C9A84C",
   red:    "#b93228",
   gray:   "#9e9b93",
@@ -14,12 +15,16 @@ const DOT: Record<string, string> = {
 function stayDot(s: ReturnType<typeof getUpcomingStays>[number] | undefined) {
   if (!s) return "gray";
   if (s.cost > 0) return "paid";
-  return s.person === "Travis" ? "travis" : "briana";
+  if (s.person === "Travis") return "travis";
+  if (s.person === "Briana") return "briana";
+  if (s.person === "Both")   return "both";
+  return "gray";
 }
 
 function staySub(s: ReturnType<typeof getUpcomingStays>[number] | undefined, empty: string) {
   if (!s) return empty;
-  if (s.cost > 0) return `${s.guest || "Paid guest"} · $${s.cost}`;
+  if (s.cost > 0)            return `${s.guest || "Paid guest"} · $${s.cost}`;
+  if (s.person === "Both")   return `${s.guest || "Shared"} · ${s.nights}n`;
   return `${s.person} · ${s.nights} night${s.nights !== 1 ? "s" : ""}`;
 }
 

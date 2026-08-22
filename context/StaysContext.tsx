@@ -2,20 +2,22 @@
 
 import { createContext, useContext, useState, ReactNode } from "react";
 
-export type Person = "Travis" | "Briana";
+export type Person     = "Travis" | "Briana";
+export type StayPerson = Person | "Both"; // "Both" = shared family guest
 
 export type Stay = {
   id: string;
-  person?: Person;   // undefined for paid guest stays
-  startDate: string; // "YYYY-MM-DD"
+  person?: StayPerson; // undefined for paid guest stays
+  startDate: string;   // "YYYY-MM-DD"
   nights: number;
-  guest?: string;    // optional name shown on calendar; color still reflects person/paid
-  cost: number;      // 0 = owner/owner-guest stay; >0 = paid guest stay
+  guest?: string;      // optional name shown on calendar; color still reflects person/paid
+  cost: number;        // 0 = owner/owner-guest stay; >0 = paid guest stay
 };
 
 type StaysCtx = {
   stays: Stay[];
   addStay: (s: Omit<Stay, "id">) => void;
+  updateStay: (id: string, s: Omit<Stay, "id">) => void;
   removeStay: (id: string) => void;
 };
 
@@ -32,10 +34,13 @@ export function StaysProvider({ children }: { children: ReactNode }) {
   const addStay = (s: Omit<Stay, "id">) =>
     setStays(prev => [...prev, { ...s, id: crypto.randomUUID() }]);
 
+  const updateStay = (id: string, s: Omit<Stay, "id">) =>
+    setStays(prev => prev.map(st => st.id === id ? { ...s, id } : st));
+
   const removeStay = (id: string) =>
     setStays(prev => prev.filter(s => s.id !== id));
 
-  return <Ctx.Provider value={{ stays, addStay, removeStay }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ stays, addStay, updateStay, removeStay }}>{children}</Ctx.Provider>;
 }
 
 export function useStays() {

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { IconCalendarEvent, IconChevronLeft, IconChevronRight, IconTrash, IconX } from "@tabler/icons-react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
-import { useStays, type Person, type Stay } from "@/context/StaysContext";
+import { useStays, type StayPerson, type Stay } from "@/context/StaysContext";
 import { usePeople } from "@/context/PeopleContext";
-import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, PAID, stayColors, personColors, formatStayRange } from "@/lib/stayUtils";
+import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, BOTH, PAID, stayColors, personColors, formatStayRange, formatShortDate } from "@/lib/stayUtils";
 
 function getDayStyle(stay: Stay | undefined, isToday: boolean) {
   let bg = "#f4f3f0", color = "#6b6960", border = "none" as string, fontWeight = 400;
@@ -18,16 +18,18 @@ function getDayStyle(stay: Stay | undefined, isToday: boolean) {
   return { bg, color, border, fontWeight };
 }
 
+type ModalState = { day: number; existing?: Stay; editing?: boolean };
+
 export default function SchedulingPage() {
-  const { stays, addStay, removeStay } = useStays();
+  const { stays, addStay, updateStay, removeStay } = useStays();
   const { people } = usePeople();
 
   const now = new Date();
   const [viewYear,  setViewYear]  = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
 
-  const [modal,     setModal]     = useState<{ day: number; existing?: Stay } | null>(null);
-  const [person,    setPerson]    = useState<Person>("Travis");
+  const [modal,     setModal]     = useState<ModalState | null>(null);
+  const [person,    setPerson]    = useState<StayPerson>("Travis");
   const [nights,    setNights]    = useState(1);
   const [guest,     setGuest]     = useState("");
   const [cost,      setCost]      = useState(0);
@@ -63,6 +65,17 @@ export default function SchedulingPage() {
     setModal({ day, existing });
   }
 
+  function enterEditMode() {
+    if (!modal?.existing) return;
+    const ex = modal.existing;
+    setPerson(ex.person ?? "Travis");
+    setNights(ex.nights);
+    setGuest(ex.guest ?? "");
+    setCost(ex.cost);
+    setCostInput(String(ex.cost));
+    setModal({ ...modal, editing: true });
+  }
+
   function handleCostChange(raw: string) {
     setCostInput(raw);
     const n = parseFloat(raw);
@@ -71,15 +84,19 @@ export default function SchedulingPage() {
 
   function handleConfirm() {
     if (!modal) return;
-    const mm = String(viewMonth).padStart(2, "0");
-    const dd = String(modal.day).padStart(2, "0");
-    addStay({
+    const isEdit = !!(modal.existing && modal.editing);
+    const startDate = isEdit
+      ? modal.existing!.startDate
+      : `${viewYear}-${String(viewMonth).padStart(2, "0")}-${String(modal.day).padStart(2, "0")}`;
+    const data = {
       person: cost > 0 ? undefined : person,
-      startDate: `${viewYear}-${mm}-${dd}`,
+      startDate,
       nights,
       guest: guest.trim() || undefined,
       cost,
-    });
+    };
+    if (isEdit) updateStay(modal.existing!.id, data);
+    else        addStay(data);
     setModal(null);
   }
 
@@ -87,11 +104,15 @@ export default function SchedulingPage() {
     if (modal?.existing) { removeStay(modal.existing.id); setModal(null); }
   }
 
-  const modalDateLabel = modal ? `${MONTHS[viewMonth - 1]} ${modal.day}, ${viewYear}` : "";
-  const ownerPeople = people.filter(p => p.type === "owner");
-  const paidPeople  = people.filter(p => p.type === "paid");
-  const chipPeople  = cost > 0 ? paidPeople : ownerPeople;
-  const confirmBg   = cost > 0 ? PAID.solid : personColors(person).solid;
+  const isEdit    = !!(modal?.existing && modal.editing);
+  const isDetails = !!(modal?.existing && !modal.editing);
+  const chipPeople = cost > 0 ? people.filter(p => p.type === "paid") : people.filter(p => p.type === "owner");
+  const confirmBg  = cost > 0 ? PAID.solid : personColors(person).solid;
+
+  const modalTitle = isEdit ? "Edit stay" : isDetails ? "Stay details" : "Add a stay";
+  const modalSub   = isEdit && modal?.existing
+    ? `Starting ${formatShortDate(modal.existing.startDate)}`
+    : modal ? `${MONTHS[viewMonth - 1]} ${modal.day}, ${viewYear}` : "";
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -150,10 +171,7 @@ export default function SchedulingPage() {
               ))}
             </div>
 
-            <div
-              className="flex-1 min-h-0"
-              style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: `repeat(${numRows}, 1fr)`, gap: 4, marginTop: 4 }}
-            >
+            <div className="flex-1 min-h-0" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: `repeat(${numRows}, 1fr)`, gap: 4, marginTop: 4 }}>
               {Array(firstDow).fill(null).map((_, i) => <div key={`e${i}`} />)}
               {Array.from({ length: totalDays }, (_, i) => i + 1).map(day => {
                 const stay  = occupied.get(day);
@@ -167,21 +185,18 @@ export default function SchedulingPage() {
                     onClick={() => openModal(day)}
                   >
                     <span style={{ fontSize: 13 }}>{day}</span>
-                    {label && (
-                      <span style={{ fontSize: 9, lineHeight: 1.3, maxWidth: "88%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.85 }}>
-                        {label}
-                      </span>
-                    )}
+                    {label && <span style={{ fontSize: 9, lineHeight: 1.3, maxWidth: "88%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.85 }}>{label}</span>}
                   </div>
                 );
               })}
             </div>
 
-            <div className="flex items-center gap-4 pt-4 mt-4" style={{ borderTop: "1px solid #e4e2dc", flexShrink: 0 }}>
+            <div className="flex items-center gap-3 pt-4 mt-4 flex-wrap" style={{ borderTop: "1px solid #e4e2dc", flexShrink: 0 }}>
               {[
-                { label: "Travis",     ...TRAVIS.legend },
-                { label: "Briana",     ...BRIANA.legend },
-                { label: "Paid Guest", ...PAID.legend   },
+                { label: "Travis",  ...TRAVIS.legend },
+                { label: "Briana",  ...BRIANA.legend },
+                { label: "Shared",  ...BOTH.legend   },
+                { label: "Paid",    ...PAID.legend    },
               ].map(({ label, bg, border }) => (
                 <div key={label} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#6b6960" }}>
                   <span className="rounded" style={{ width: 10, height: 10, background: bg, border, display: "inline-block" }} />
@@ -201,17 +216,15 @@ export default function SchedulingPage() {
                 <div className="text-[10px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Upcoming</div>
                 <div className="flex flex-col gap-2">
                   {upcoming.map(s => {
-                    const c = stayColors(s);
-                    const label = s.guest || (s.cost > 0 ? "Paid guest" : s.person);
+                    const c     = stayColors(s);
+                    const label = s.guest || (s.cost > 0 ? "Paid guest" : s.person === "Both" ? "Shared" : s.person);
                     const sub   = s.cost > 0 ? `$${s.cost} · ` : s.guest ? `${s.person} · ` : "";
                     return (
                       <div key={s.id} className="flex items-center gap-2.5 rounded-xl" style={{ padding: "10px 12px", background: c.bg }}>
                         <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, background: c.solid }} />
                         <div className="flex-1 min-w-0">
                           <div className="text-[12.5px] font-medium truncate" style={{ color: "#1c1c1a" }}>{label}</div>
-                          <div className="text-[11px] mt-0.5 truncate" style={{ color: "#6b6960" }}>
-                            {sub}{formatStayRange(s)} · {s.nights}n
-                          </div>
+                          <div className="text-[11px] mt-0.5 truncate" style={{ color: "#6b6960" }}>{sub}{formatStayRange(s)} · {s.nights}n</div>
                         </div>
                         <button
                           className="flex items-center justify-center rounded-lg flex-shrink-0"
@@ -234,16 +247,14 @@ export default function SchedulingPage() {
                 <div className="text-[10px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Past</div>
                 <div className="flex flex-col gap-2">
                   {past.map(s => {
-                    const label = s.guest || (s.cost > 0 ? "Paid guest" : s.person);
+                    const label = s.guest || (s.cost > 0 ? "Paid guest" : s.person === "Both" ? "Shared" : s.person);
                     const sub   = s.cost > 0 ? `$${s.cost} · ` : s.guest ? `${s.person} · ` : "";
                     return (
                       <div key={s.id} className="flex items-center gap-2.5 rounded-xl" style={{ padding: "10px 12px", background: "#f4f3f0" }}>
                         <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, background: "#9e9b93" }} />
                         <div className="flex-1 min-w-0">
                           <div className="text-[12.5px] font-medium truncate" style={{ color: "#6b6960" }}>{label}</div>
-                          <div className="text-[11px] mt-0.5 truncate" style={{ color: "#9e9b93" }}>
-                            {sub}{formatStayRange(s)} · {s.nights}n
-                          </div>
+                          <div className="text-[11px] mt-0.5 truncate" style={{ color: "#9e9b93" }}>{sub}{formatStayRange(s)} · {s.nights}n</div>
                         </div>
                         <button
                           className="flex items-center justify-center rounded-lg flex-shrink-0"
@@ -280,10 +291,8 @@ export default function SchedulingPage() {
           <div className="bg-white rounded-2xl" style={{ width: 340, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
             <div className="flex items-start justify-between mb-5">
               <div>
-                <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
-                  {modal.existing ? "Stay details" : "Add a stay"}
-                </div>
-                <div className="text-[12px] mt-0.5" style={{ color: "#9e9b93" }}>{modalDateLabel}</div>
+                <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>{modalTitle}</div>
+                <div className="text-[12px] mt-0.5" style={{ color: "#9e9b93" }}>{modalSub}</div>
               </div>
               <button
                 onClick={() => setModal(null)}
@@ -294,23 +303,30 @@ export default function SchedulingPage() {
               </button>
             </div>
 
-            {modal.existing ? (
+            {isDetails ? (
               <>
                 <div
                   className="rounded-xl flex items-center gap-3 mb-5"
-                  style={{ padding: "14px 16px", background: stayColors(modal.existing).bg }}
+                  style={{ padding: "14px 16px", background: stayColors(modal.existing!).bg }}
                 >
-                  <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: stayColors(modal.existing).solid }} />
+                  <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: stayColors(modal.existing!).solid }} />
                   <div>
                     <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>
-                      {modal.existing.guest || (modal.existing.cost > 0 ? "Paid guest" : modal.existing.person)}
+                      {modal.existing!.guest || (modal.existing!.cost > 0 ? "Paid guest" : modal.existing!.person === "Both" ? "Shared" : modal.existing!.person)}
                     </div>
                     <div className="text-[11.5px] mt-0.5" style={{ color: "#6b6960" }}>
-                      {modal.existing.cost > 0 ? `$${modal.existing.cost} · ` : modal.existing.guest ? `${modal.existing.person} · ` : ""}
-                      {modal.existing.nights} night{modal.existing.nights !== 1 ? "s" : ""} · {formatStayRange(modal.existing)}
+                      {modal.existing!.cost > 0 ? `$${modal.existing!.cost} · ` : modal.existing!.guest ? `${modal.existing!.person} · ` : ""}
+                      {modal.existing!.nights} night{modal.existing!.nights !== 1 ? "s" : ""} · {formatStayRange(modal.existing!)}
                     </div>
                   </div>
                 </div>
+                <button
+                  className="w-full py-2.5 rounded-xl text-[13px] font-medium mb-2"
+                  style={{ background: "#f4f3f0", color: "#1c1c1a", border: "none", cursor: "pointer" }}
+                  onClick={enterEditMode}
+                >
+                  Edit stay
+                </button>
                 <div className="flex gap-2">
                   <button
                     className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
@@ -324,13 +340,12 @@ export default function SchedulingPage() {
                     style={{ background: "rgba(185,50,40,0.1)", color: "#b93228", border: "none", cursor: "pointer" }}
                     onClick={handleRemove}
                   >
-                    Remove stay
+                    Remove
                   </button>
                 </div>
               </>
             ) : (
               <>
-                {/* Cost */}
                 <div className="mb-4">
                   <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>
                     Cost <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>($0 = owner stay)</span>
@@ -353,18 +368,14 @@ export default function SchedulingPage() {
                       }}
                     />
                   </div>
-                  {cost > 0 && (
-                    <div className="text-[11px] mt-1.5" style={{ color: PAID.solid }}>
-                      Paid stay — not counted against owner allocation
-                    </div>
-                  )}
+                  {cost > 0 && <div className="text-[11px] mt-1.5" style={{ color: PAID.solid }}>Paid stay — not counted against owner allocation</div>}
                 </div>
 
                 {cost === 0 && (
                   <div className="mb-4">
                     <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Owner</div>
                     <div className="flex gap-2">
-                      {(["Travis", "Briana"] as Person[]).map(p => {
+                      {(["Travis", "Briana", "Both"] as StayPerson[]).map(p => {
                         const c = personColors(p);
                         return (
                           <button
@@ -424,21 +435,9 @@ export default function SchedulingPage() {
                 <div className="mb-5">
                   <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Nights</div>
                   <div className="flex items-center gap-3">
-                    <button
-                      className="flex items-center justify-center rounded-xl text-[18px] font-medium"
-                      style={{ width: 36, height: 36, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}
-                      onClick={() => setNights(n => Math.max(1, n - 1))}
-                    >
-                      −
-                    </button>
+                    <button className="flex items-center justify-center rounded-xl text-[18px] font-medium" style={{ width: 36, height: 36, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }} onClick={() => setNights(n => Math.max(1, n - 1))}>−</button>
                     <span className="flex-1 text-center text-[22px] font-semibold" style={{ color: "#1c1c1a" }}>{nights}</span>
-                    <button
-                      className="flex items-center justify-center rounded-xl text-[18px] font-medium"
-                      style={{ width: 36, height: 36, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}
-                      onClick={() => setNights(n => n + 1)}
-                    >
-                      +
-                    </button>
+                    <button className="flex items-center justify-center rounded-xl text-[18px] font-medium" style={{ width: 36, height: 36, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }} onClick={() => setNights(n => n + 1)}>+</button>
                   </div>
                 </div>
 
@@ -446,16 +445,16 @@ export default function SchedulingPage() {
                   <button
                     className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
                     style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }}
-                    onClick={() => setModal(null)}
+                    onClick={() => isEdit ? setModal({ ...modal!, editing: false }) : setModal(null)}
                   >
-                    Cancel
+                    {isEdit ? "Back" : "Cancel"}
                   </button>
                   <button
                     className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
                     style={{ border: "none", cursor: "pointer", background: confirmBg, color: "#fff" }}
                     onClick={handleConfirm}
                   >
-                    Confirm
+                    {isEdit ? "Save" : "Confirm"}
                   </button>
                 </div>
               </>

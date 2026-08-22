@@ -1,4 +1,4 @@
-import type { Stay } from "@/context/StaysContext";
+import type { Stay, StayPerson } from "@/context/StaysContext";
 
 export const MONTHS = [
   "January","February","March","April","May","June",
@@ -12,7 +12,6 @@ export const MONTHS_SHORT = [
 
 export const DOW = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
-// Travis = amber, Briana = teal, Paid = gold
 export const TRAVIS = {
   bg:     "rgba(192,128,64,0.15)",
   border: "1px solid rgba(192,128,64,0.22)",
@@ -29,6 +28,14 @@ export const BRIANA = {
   legend: { bg: "rgba(59,158,149,0.13)", border: "1px solid rgba(59,158,149,0.22)" },
 };
 
+export const BOTH = {
+  bg:     "rgba(127,168,130,0.15)",
+  border: "1px solid rgba(127,168,130,0.28)",
+  text:   "#3d5e3f",
+  solid:  "#7FA882",
+  legend: { bg: "rgba(127,168,130,0.15)", border: "1px solid rgba(127,168,130,0.28)" },
+};
+
 export const PAID = {
   bg:     "rgba(201,168,76,0.15)",
   border: "1px solid rgba(201,168,76,0.30)",
@@ -37,13 +44,15 @@ export const PAID = {
   legend: { bg: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.30)" },
 };
 
-export function personColors(person: "Travis" | "Briana") {
-  return person === "Travis" ? TRAVIS : BRIANA;
+export function personColors(person: StayPerson) {
+  if (person === "Travis") return TRAVIS;
+  if (person === "Briana") return BRIANA;
+  return BOTH;
 }
 
 export function stayColors(stay: Stay) {
   if (stay.cost > 0) return PAID;
-  if (stay.person) return personColors(stay.person);
+  if (stay.person)   return personColors(stay.person);
   return PAID;
 }
 
