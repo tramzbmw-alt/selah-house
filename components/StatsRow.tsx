@@ -4,8 +4,8 @@ import { useStays } from "@/context/StaysContext";
 import { getUpcomingStays, formatShortDate } from "@/lib/stayUtils";
 
 const DOT: Record<string, string> = {
-  teal:  "#3b9e95",
-  amber: "#c08040",
+  teal:  "#c08040",  // Travis = amber
+  amber: "#3b9e95",  // Briana = teal
   red:   "#b93228",
   gray:  "#9e9b93",
 };

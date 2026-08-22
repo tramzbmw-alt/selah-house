@@ -26,8 +26,8 @@ export default function Topbar() {
         {/* Avatars */}
         <div className="flex items-center">
           {[
-            { initials: "TR", bg: "#3b9e95", label: "Travis" },
-            { initials: "BR", bg: "#c08040", label: "Briana", offset: true },
+            { initials: "TR", bg: "#c08040", label: "Travis" },
+            { initials: "BR", bg: "#3b9e95", label: "Briana", offset: true },
           ].map(({ initials, bg, label, offset }) => (
             <div
               key={initials}

@@ -9,6 +9,7 @@ export type Stay = {
   person: Person;
   startDate: string; // "YYYY-MM-DD"
   nights: number;
+  guest?: string; // optional guest name; color still reflects person
 };
 
 type StaysCtx = {
@@ -20,8 +21,8 @@ type StaysCtx = {
 const Ctx = createContext<StaysCtx | null>(null);
 
 const SEED: Stay[] = [
-  { id: "seed-1", person: "Travis",  startDate: "2026-08-18", nights: 5 },
-  { id: "seed-2", person: "Briana",  startDate: "2026-09-04", nights: 3 },
+  { id: "seed-1", person: "Travis", startDate: "2026-08-18", nights: 5 },
+  { id: "seed-2", person: "Briana", startDate: "2026-09-04", nights: 3 },
 ];
 
 export function StaysProvider({ children }: { children: ReactNode }) {
