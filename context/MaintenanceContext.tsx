@@ -5,7 +5,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 export type TaskCategory   = "HVAC" | "Plumbing" | "Pest Control" | "Electrical" | "General" | "Other";
 export type TaskRecurrence = "One-time" | "Monthly" | "Quarterly" | "Semi-annual" | "Annual";
 export type TaskAssignee   = "Travis" | "Briana" | "Vendor";
-export type TaskStatus     = "Overdue" | "Pending" | "Upcoming" | "Done";
+export type TaskStatus     = "Overdue" | "Upcoming" | "Done";
 
 export type MaintenanceTask = {
   id: string;
@@ -29,10 +29,7 @@ export function deriveStatus(task: MaintenanceTask): TaskStatus {
   if (task.manualDone) return "Done";
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const due   = new Date(task.dueDate + "T12:00:00"); due.setHours(0, 0, 0, 0);
-  const diff  = Math.floor((due.getTime() - today.getTime()) / 86400000);
-  if (diff < 0)   return "Overdue";
-  if (diff <= 30) return "Pending";
-  return "Upcoming";
+  return due < today ? "Overdue" : "Upcoming";
 }
 
 export function nextDueDate(dueDate: string, recurrence: TaskRecurrence): string | null {

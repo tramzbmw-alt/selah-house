@@ -21,7 +21,6 @@ function catIcon(cat: TaskCategory) {
 
 const STATUS_COLORS = {
   Overdue:  { bg: "rgba(185,50,40,0.1)",  text: "#b93228" },
-  Pending:  { bg: "rgba(192,128,64,0.13)", text: "#7a4e10" },
   Upcoming: { bg: "#f0ede8",               text: "#9e9b93" },
   Done:     { bg: "rgba(59,158,149,0.1)",  text: "#16645d" },
 };

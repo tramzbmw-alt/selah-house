@@ -16,12 +16,11 @@ function catIcon(cat: TaskCategory) {
 
 const STATUS_STYLE: Record<TaskStatus, { badge: [string, string]; icon: [string, string] }> = {
   Overdue:  { badge: ["rgba(185,50,40,0.12)",  "#b93228"], icon: ["rgba(185,50,40,0.12)",  "#b93228"] },
-  Pending:  { badge: ["rgba(192,128,64,0.13)", "#7a4e10"], icon: ["rgba(192,128,64,0.13)", "#7a4e10"] },
   Upcoming: { badge: ["#f0ede8",               "#9e9b93"], icon: ["#f0ede8",               "#9e9b93"] },
   Done:     { badge: ["rgba(59,158,149,0.1)",  "#16645d"], icon: ["rgba(59,158,149,0.1)",  "#16645d"] },
 };
 
-const STATUS_ORDER: Record<TaskStatus, number> = { Overdue: 0, Pending: 1, Upcoming: 2, Done: 3 };
+const STATUS_ORDER: Record<TaskStatus, number> = { Overdue: 0, Upcoming: 1, Done: 2 };
 
 function sortedTasks(tasks: MaintenanceTask[]) {
   return [...tasks].sort((a, b) => {

@@ -11,7 +11,6 @@ import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, BOTH, PAID,
 
 const MAINT_DOT: Partial<Record<TaskStatus, string>> = {
   Overdue:  "#b93228",
-  Pending:  "#c08040",
   Upcoming: "#9e9b93",
 };
 
@@ -202,8 +201,6 @@ export default function SchedulingPage() {
                 const mStatuses = maintDays.get(day) ?? [];
                 const dotColor  = mStatuses.includes("Overdue")
                   ? MAINT_DOT.Overdue
-                  : mStatuses.includes("Pending")
-                  ? MAINT_DOT.Pending
                   : mStatuses.includes("Upcoming")
                   ? MAINT_DOT.Upcoming
                   : null;

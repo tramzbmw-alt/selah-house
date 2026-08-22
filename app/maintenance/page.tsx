@@ -18,13 +18,12 @@ function catIcon(cat: TaskCategory) {
 
 const STATUS_STYLE: Record<TaskStatus, { badge: [string, string]; icon: [string, string] }> = {
   Overdue:  { badge: ["rgba(185,50,40,0.12)",  "#b93228"], icon: ["rgba(185,50,40,0.12)",  "#b93228"] },
-  Pending:  { badge: ["rgba(192,128,64,0.13)", "#7a4e10"], icon: ["rgba(192,128,64,0.13)", "#7a4e10"] },
   Upcoming: { badge: ["#f0ede8",               "#9e9b93"], icon: ["#f0ede8",               "#9e9b93"] },
   Done:     { badge: ["rgba(59,158,149,0.1)",  "#16645d"], icon: ["rgba(59,158,149,0.1)",  "#16645d"] },
 };
 
-const STATUS_ORDER: Record<TaskStatus, number> = { Overdue: 0, Pending: 1, Upcoming: 2, Done: 3 };
-const FILTERS = ["All", "Overdue", "Pending", "Upcoming", "Done"] as const;
+const STATUS_ORDER: Record<TaskStatus, number> = { Overdue: 0, Upcoming: 1, Done: 2 };
+const FILTERS = ["All", "Overdue", "Upcoming", "Done"] as const;
 type Filter = typeof FILTERS[number];
 
 function sortTasks(tasks: MaintenanceTask[]) {
@@ -115,7 +114,7 @@ export default function MaintenancePage() {
                 return (
                   <button
                     key={f}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium"
+                    className="flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-medium"
                     style={{
                       border: "none", cursor: "pointer",
                       background: active ? "#1c1c1a" : "#f0ede8",
@@ -126,11 +125,10 @@ export default function MaintenancePage() {
                     {f}
                     {count > 0 && (
                       <span
-                        className="text-[10px] font-semibold px-1.5 rounded-full"
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                         style={{
-                          background: active ? "rgba(255,255,255,0.2)" : "#e4e2dc",
+                          background: active ? "rgba(255,255,255,0.22)" : "#e0ddd8",
                           color:      active ? "#fff" : "#6b6960",
-                          lineHeight: "16px", display: "inline-block",
                         }}
                       >
                         {count}
