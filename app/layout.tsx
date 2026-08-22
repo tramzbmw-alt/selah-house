@@ -3,6 +3,7 @@ import { Inter, Lora } from "next/font/google";
 import { StaysProvider } from "@/context/StaysContext";
 import { PeopleProvider } from "@/context/PeopleContext";
 import { MaintenanceProvider } from "@/context/MaintenanceContext";
+import { ExpensesProvider } from "@/context/ExpensesContext";
 import "./globals.css";
 
 const inter = Inter({
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${lora.variable}`}>
-      <body><MaintenanceProvider><PeopleProvider><StaysProvider>{children}</StaysProvider></PeopleProvider></MaintenanceProvider></body>
+      <body><ExpensesProvider><MaintenanceProvider><PeopleProvider><StaysProvider>{children}</StaysProvider></PeopleProvider></MaintenanceProvider></ExpensesProvider></body>
     </html>
   );
 }

@@ -2,7 +2,8 @@
 
 import { useStays } from "@/context/StaysContext";
 import { useMaintenance, deriveStatus } from "@/context/MaintenanceContext";
-import { getUpcomingStays, formatShortDate } from "@/lib/stayUtils";
+import { useExpenses } from "@/context/ExpensesContext";
+import { getUpcomingStays, formatShortDate, MONTHS_SHORT } from "@/lib/stayUtils";
 
 const DOT: Record<string, string> = {
   travis: "#c08040",
@@ -30,15 +31,29 @@ function staySub(s: ReturnType<typeof getUpcomingStays>[number] | undefined, emp
 }
 
 export default function StatsRow() {
-  const { stays }  = useStays();
-  const { tasks }  = useMaintenance();
-  const upcoming   = getUpcomingStays(stays);
-  const next       = upcoming[0];
-  const after      = upcoming[1];
+  const { stays }    = useStays();
+  const { tasks }    = useMaintenance();
+  const { expenses } = useExpenses();
+  const upcoming     = getUpcomingStays(stays);
+  const next         = upcoming[0];
+  const after        = upcoming[1];
+
+  const now = new Date();
+  const cm  = now.getMonth() + 1;
+  const cy  = now.getFullYear();
 
   const openTasks    = tasks.filter(t => deriveStatus(t) !== "Done").length;
   const overdueTasks = tasks.filter(t => deriveStatus(t) === "Overdue").length;
   const taskSub      = overdueTasks > 0 ? `${overdueTasks} overdue` : openTasks === 0 ? "All clear" : "all on track";
+
+  const monthExpenses = expenses.filter(e => {
+    const d = new Date(e.datePaid + "T12:00:00");
+    return d.getFullYear() === cy && d.getMonth() + 1 === cm;
+  });
+  const monthTotal = monthExpenses.reduce((s, e) => s + e.amount, 0);
+  const expLabel   = `${MONTHS_SHORT[now.getMonth()]} Expenses`;
+  const expValue   = "$" + (monthTotal % 1 === 0 ? monthTotal.toLocaleString() : monthTotal.toFixed(2));
+  const expSub     = monthExpenses.length === 0 ? "none logged" : `${monthExpenses.length} expense${monthExpenses.length !== 1 ? "s" : ""}`;
 
   const STATS = [
     {
@@ -59,7 +74,7 @@ export default function StatsRow() {
       sub:   taskSub,
       dot:   overdueTasks > 0 ? "red" : openTasks === 0 ? "briana" : "gray",
     },
-    { label: "Aug Expenses", value: "$3,190", sub: "mortgage + utilities", dot: "gray" },
+    { label: expLabel, value: expValue, sub: expSub, dot: "gray" },
   ];
 
   return (
