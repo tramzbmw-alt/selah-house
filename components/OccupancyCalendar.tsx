@@ -4,12 +4,12 @@ import { useState } from "react";
 import { IconCalendarEvent, IconChevronLeft, IconChevronRight, IconX } from "@tabler/icons-react";
 import { useStays, type Person, type Stay } from "@/context/StaysContext";
 import { usePeople } from "@/context/PeopleContext";
-import { getOccupied, MONTHS, DOW, TRAVIS, BRIANA, personColors } from "@/lib/stayUtils";
+import { getOccupied, MONTHS, DOW, TRAVIS, BRIANA, PAID, stayColors, personColors } from "@/lib/stayUtils";
 
 function getDayStyle(stay: Stay | undefined, isToday: boolean) {
   let bg = "#f4f3f0", color = "#6b6960", border = "none" as string, fontWeight = 400;
   if (stay) {
-    const c = personColors(stay.person);
+    const c = stayColors(stay);
     bg = c.bg; color = c.text; border = c.border; fontWeight = 600;
   }
   if (isToday) border = "2px solid #3b9e95";
@@ -28,6 +28,8 @@ export default function OccupancyCalendar() {
   const [person, setPerson] = useState<Person>("Travis");
   const [nights, setNights] = useState(1);
   const [guest,  setGuest]  = useState("");
+  const [cost,   setCost]   = useState(0);
+  const [costInput, setCostInput] = useState("0");
 
   const firstDow  = new Date(viewYear, viewMonth - 1, 1).getDay();
   const totalDays = new Date(viewYear, viewMonth, 0).getDate();
@@ -46,16 +48,30 @@ export default function OccupancyCalendar() {
   function openModal(day: number) {
     const existing = occupied.get(day);
     setPerson(existing?.person ?? "Travis");
-    setNights(1);
+    setNights(existing?.nights ?? 1);
     setGuest("");
+    setCost(0);
+    setCostInput("0");
     setModal({ day, existing });
+  }
+
+  function handleCostChange(raw: string) {
+    setCostInput(raw);
+    const n = parseFloat(raw);
+    setCost(isNaN(n) || n < 0 ? 0 : n);
   }
 
   function handleConfirm() {
     if (!modal) return;
     const mm = String(viewMonth).padStart(2, "0");
     const dd = String(modal.day).padStart(2, "0");
-    addStay({ person, startDate: `${viewYear}-${mm}-${dd}`, nights, guest: guest.trim() || undefined });
+    addStay({
+      person: cost > 0 ? undefined : person,
+      startDate: `${viewYear}-${mm}-${dd}`,
+      nights,
+      guest: guest.trim() || undefined,
+      cost,
+    });
     setModal(null);
   }
 
@@ -64,6 +80,14 @@ export default function OccupancyCalendar() {
   }
 
   const modalDateLabel = modal ? `${MONTHS[viewMonth - 1]} ${modal.day}, ${viewYear}` : "";
+
+  // Filter people chips by stay type
+  const ownerPeople = people.filter(p => p.type === "owner");
+  const paidPeople  = people.filter(p => p.type === "paid");
+  const chipPeople  = cost > 0 ? paidPeople : ownerPeople;
+
+  // Confirm button color
+  const confirmBg = cost > 0 ? PAID.solid : personColors(person).solid;
 
   return (
     <div className="bg-white border border-[#e4e2dc] rounded-xl flex flex-col" style={{ padding: "20px" }}>
@@ -118,8 +142,8 @@ export default function OccupancyCalendar() {
         ))}
         {Array(firstDow).fill(null).map((_, i) => <div key={`e${i}`} style={{ height: 44 }} />)}
         {Array.from({ length: totalDays }, (_, i) => i + 1).map(day => {
-          const stay = occupied.get(day);
-          const s    = getDayStyle(stay, day === todayDay);
+          const stay  = occupied.get(day);
+          const s     = getDayStyle(stay, day === todayDay);
           const label = stay?.guest ? stay.guest.split(" ")[0] : null;
           return (
             <div
@@ -142,15 +166,16 @@ export default function OccupancyCalendar() {
       {/* Legend */}
       <div className="flex items-center gap-4 mt-4 pt-4" style={{ borderTop: "1px solid #e4e2dc" }}>
         {[
-          { label: "Travis", ...TRAVIS.legend },
-          { label: "Briana", ...BRIANA.legend },
+          { label: "Travis",     ...TRAVIS.legend },
+          { label: "Briana",     ...BRIANA.legend },
+          { label: "Paid Guest", ...PAID.legend   },
         ].map(({ label, bg, border }) => (
           <div key={label} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "#6b6960" }}>
             <span className="rounded" style={{ width: 10, height: 10, background: bg, border, display: "inline-block" }} />
             {label}
           </div>
         ))}
-        <span className="ml-auto text-[10.5px]" style={{ color: "#9e9b93" }}>Click a day to claim it</span>
+        <span className="ml-auto text-[10.5px]" style={{ color: "#9e9b93" }}>Click a day</span>
       </div>
 
       {/* Modal */}
@@ -161,10 +186,11 @@ export default function OccupancyCalendar() {
           onClick={e => { if (e.target === e.currentTarget) setModal(null); }}
         >
           <div className="bg-white rounded-2xl" style={{ width: 340, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            {/* Header */}
             <div className="flex items-start justify-between mb-5">
               <div>
                 <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
-                  {modal.existing ? "Stay details" : "Claim this day"}
+                  {modal.existing ? "Stay details" : "Add a stay"}
                 </div>
                 <div className="text-[12px] mt-0.5" style={{ color: "#9e9b93" }}>{modalDateLabel}</div>
               </div>
@@ -178,19 +204,22 @@ export default function OccupancyCalendar() {
             </div>
 
             {modal.existing ? (
+              /* ── Existing stay view ── */
               <>
                 <div
                   className="rounded-xl flex items-center gap-3 mb-5"
-                  style={{ padding: "14px 16px", background: personColors(modal.existing.person).bg }}
+                  style={{ padding: "14px 16px", background: stayColors(modal.existing).bg }}
                 >
-                  <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: personColors(modal.existing.person).solid }} />
+                  <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: stayColors(modal.existing).solid }} />
                   <div>
                     <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>
-                      {modal.existing.guest || modal.existing.person}
+                      {modal.existing.guest || (modal.existing.cost > 0 ? "Paid guest" : modal.existing.person)}
                     </div>
                     <div className="text-[11.5px] mt-0.5" style={{ color: "#6b6960" }}>
-                      {modal.existing.guest && `${modal.existing.person} · `}
-                      {modal.existing.nights} night{modal.existing.nights !== 1 ? "s" : ""} starting {MONTHS[new Date(modal.existing.startDate + "T12:00:00").getMonth()]} {new Date(modal.existing.startDate + "T12:00:00").getDate()}
+                      {modal.existing.cost > 0
+                        ? `$${modal.existing.cost} · `
+                        : modal.existing.guest ? `${modal.existing.person} · ` : ""}
+                      {modal.existing.nights} night{modal.existing.nights !== 1 ? "s" : ""} from {MONTHS[new Date(modal.existing.startDate + "T12:00:00").getMonth()]} {new Date(modal.existing.startDate + "T12:00:00").getDate()}
                     </div>
                   </div>
                 </div>
@@ -212,30 +241,64 @@ export default function OccupancyCalendar() {
                 </div>
               </>
             ) : (
+              /* ── New stay form ── */
               <>
-                {/* Who */}
+                {/* Cost */}
                 <div className="mb-4">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Owner</div>
-                  <div className="flex gap-2">
-                    {(["Travis", "Briana"] as Person[]).map(p => {
-                      const c = personColors(p);
-                      return (
-                        <button
-                          key={p}
-                          className="flex-1 py-2 rounded-xl text-[13px] font-medium transition-all duration-150"
-                          style={{
-                            border: "none", cursor: "pointer",
-                            background: person === p ? c.bg : "#f4f3f0",
-                            color:      person === p ? c.text : "#6b6960",
-                          }}
-                          onClick={() => setPerson(p)}
-                        >
-                          {p}
-                        </button>
-                      );
-                    })}
+                  <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>
+                    Cost <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>($0 = owner stay)</span>
                   </div>
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9e9b93", fontSize: 13, pointerEvents: "none" }}>$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={costInput}
+                      onChange={e => handleCostChange(e.target.value)}
+                      onFocus={e => { if (e.target.value === "0") setCostInput(""); }}
+                      onBlur={e  => { if (e.target.value === "") { setCostInput("0"); setCost(0); } }}
+                      style={{
+                        width: "100%", padding: "9px 12px 9px 26px", border: "1px solid #e4e2dc",
+                        borderRadius: 10, background: cost > 0 ? "rgba(201,168,76,0.07)" : "#fafaf9",
+                        color: "#1c1c1a", fontSize: 13, outline: "none",
+                        fontFamily: "var(--font-inter), sans-serif",
+                        boxSizing: "border-box",
+                        transition: "background 0.15s",
+                      }}
+                    />
+                  </div>
+                  {cost > 0 && (
+                    <div className="text-[11px] mt-1.5" style={{ color: PAID.solid }}>
+                      Paid stay — not counted against owner allocation
+                    </div>
+                  )}
                 </div>
+
+                {/* Owner — only for free stays */}
+                {cost === 0 && (
+                  <div className="mb-4">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Owner</div>
+                    <div className="flex gap-2">
+                      {(["Travis", "Briana"] as Person[]).map(p => {
+                        const c = personColors(p);
+                        return (
+                          <button
+                            key={p}
+                            className="flex-1 py-2 rounded-xl text-[13px] font-medium transition-all duration-150"
+                            style={{
+                              border: "none", cursor: "pointer",
+                              background: person === p ? c.bg : "#f4f3f0",
+                              color:      person === p ? c.text : "#6b6960",
+                            }}
+                            onClick={() => setPerson(p)}
+                          >
+                            {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Guest name */}
                 <div className="mb-4">
@@ -246,7 +309,7 @@ export default function OccupancyCalendar() {
                     type="text"
                     value={guest}
                     onChange={e => setGuest(e.target.value)}
-                    placeholder="Leave blank for personal stay"
+                    placeholder={cost > 0 ? "Guest or group name" : "Leave blank for personal stay"}
                     style={{
                       width: "100%", padding: "9px 12px", border: "1px solid #e4e2dc",
                       borderRadius: 10, background: "#fafaf9", color: "#1c1c1a",
@@ -255,9 +318,9 @@ export default function OccupancyCalendar() {
                       boxSizing: "border-box",
                     }}
                   />
-                  {people.length > 0 && (
+                  {chipPeople.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {people.map(p => (
+                      {chipPeople.map(p => (
                         <button
                           key={p.id}
                           onClick={() => setGuest(g => g === p.name ? "" : p.name)}
@@ -307,11 +370,7 @@ export default function OccupancyCalendar() {
                   </button>
                   <button
                     className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
-                    style={{
-                      border: "none", cursor: "pointer",
-                      background: personColors(person).solid,
-                      color: "#fff",
-                    }}
+                    style={{ border: "none", cursor: "pointer", background: confirmBg, color: "#fff" }}
                     onClick={handleConfirm}
                   >
                     Confirm

@@ -12,7 +12,7 @@ export const MONTHS_SHORT = [
 
 export const DOW = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
-// Travis = amber, Briana = teal
+// Travis = amber, Briana = teal, Paid = gold
 export const TRAVIS = {
   bg:     "rgba(192,128,64,0.15)",
   border: "1px solid rgba(192,128,64,0.22)",
@@ -29,8 +29,22 @@ export const BRIANA = {
   legend: { bg: "rgba(59,158,149,0.13)", border: "1px solid rgba(59,158,149,0.22)" },
 };
 
+export const PAID = {
+  bg:     "rgba(201,168,76,0.15)",
+  border: "1px solid rgba(201,168,76,0.30)",
+  text:   "#7a5e10",
+  solid:  "#C9A84C",
+  legend: { bg: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.30)" },
+};
+
 export function personColors(person: "Travis" | "Briana") {
   return person === "Travis" ? TRAVIS : BRIANA;
+}
+
+export function stayColors(stay: Stay) {
+  if (stay.cost > 0) return PAID;
+  if (stay.person) return personColors(stay.person);
+  return PAID;
 }
 
 export function formatShortDate(dateStr: string) {

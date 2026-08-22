@@ -4,11 +4,24 @@ import { useStays } from "@/context/StaysContext";
 import { getUpcomingStays, formatShortDate } from "@/lib/stayUtils";
 
 const DOT: Record<string, string> = {
-  teal:  "#c08040",  // Travis = amber
-  amber: "#3b9e95",  // Briana = teal
-  red:   "#b93228",
-  gray:  "#9e9b93",
+  travis: "#c08040",
+  briana: "#3b9e95",
+  paid:   "#C9A84C",
+  red:    "#b93228",
+  gray:   "#9e9b93",
 };
+
+function stayDot(s: ReturnType<typeof getUpcomingStays>[number] | undefined) {
+  if (!s) return "gray";
+  if (s.cost > 0) return "paid";
+  return s.person === "Travis" ? "travis" : "briana";
+}
+
+function staySub(s: ReturnType<typeof getUpcomingStays>[number] | undefined, empty: string) {
+  if (!s) return empty;
+  if (s.cost > 0) return `${s.guest || "Paid guest"} · $${s.cost}`;
+  return `${s.person} · ${s.nights} night${s.nights !== 1 ? "s" : ""}`;
+}
 
 export default function StatsRow() {
   const { stays } = useStays();
@@ -20,17 +33,17 @@ export default function StatsRow() {
     {
       label: "Next Stay",
       value: next  ? formatShortDate(next.startDate)  : "—",
-      sub:   next  ? `${next.person} · ${next.nights} night${next.nights  !== 1 ? "s" : ""}` : "None scheduled",
-      dot:   next?.person  === "Travis" ? "teal" : next  ? "amber" : "gray",
+      sub:   staySub(next,  "None scheduled"),
+      dot:   stayDot(next),
     },
     {
       label: "After That",
       value: after ? formatShortDate(after.startDate) : "—",
-      sub:   after ? `${after.person} · ${after.nights} night${after.nights !== 1 ? "s" : ""}` : "Nothing yet",
-      dot:   after?.person === "Travis" ? "teal" : after ? "amber" : "gray",
+      sub:   staySub(after, "Nothing yet"),
+      dot:   stayDot(after),
     },
-    { label: "Open Tasks",    value: "2",      sub: "1 overdue",            dot: "red"  },
-    { label: "Aug Expenses",  value: "$3,190", sub: "mortgage + utilities", dot: "gray" },
+    { label: "Open Tasks",   value: "2",      sub: "1 overdue",            dot: "red"  },
+    { label: "Aug Expenses", value: "$3,190", sub: "mortgage + utilities", dot: "gray" },
   ];
 
   return (

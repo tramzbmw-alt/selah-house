@@ -6,12 +6,12 @@ import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { useStays, type Person, type Stay } from "@/context/StaysContext";
 import { usePeople } from "@/context/PeopleContext";
-import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, personColors, formatStayRange } from "@/lib/stayUtils";
+import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, PAID, stayColors, personColors, formatStayRange } from "@/lib/stayUtils";
 
 function getDayStyle(stay: Stay | undefined, isToday: boolean) {
   let bg = "#f4f3f0", color = "#6b6960", border = "none" as string, fontWeight = 400;
   if (stay) {
-    const c = personColors(stay.person);
+    const c = stayColors(stay);
     bg = c.bg; color = c.text; border = c.border; fontWeight = 600;
   }
   if (isToday) border = "2px solid #3b9e95";
@@ -26,10 +26,12 @@ export default function SchedulingPage() {
   const [viewYear,  setViewYear]  = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
 
-  const [modal,  setModal]  = useState<{ day: number; existing?: Stay } | null>(null);
-  const [person, setPerson] = useState<Person>("Travis");
-  const [nights, setNights] = useState(1);
-  const [guest,  setGuest]  = useState("");
+  const [modal,     setModal]     = useState<{ day: number; existing?: Stay } | null>(null);
+  const [person,    setPerson]    = useState<Person>("Travis");
+  const [nights,    setNights]    = useState(1);
+  const [guest,     setGuest]     = useState("");
+  const [cost,      setCost]      = useState(0);
+  const [costInput, setCostInput] = useState("0");
 
   const firstDow  = new Date(viewYear, viewMonth - 1, 1).getDay();
   const totalDays = new Date(viewYear, viewMonth, 0).getDate();
@@ -54,16 +56,30 @@ export default function SchedulingPage() {
   function openModal(day: number) {
     const existing = occupied.get(day);
     setPerson(existing?.person ?? "Travis");
-    setNights(1);
+    setNights(existing?.nights ?? 1);
     setGuest("");
+    setCost(0);
+    setCostInput("0");
     setModal({ day, existing });
+  }
+
+  function handleCostChange(raw: string) {
+    setCostInput(raw);
+    const n = parseFloat(raw);
+    setCost(isNaN(n) || n < 0 ? 0 : n);
   }
 
   function handleConfirm() {
     if (!modal) return;
     const mm = String(viewMonth).padStart(2, "0");
     const dd = String(modal.day).padStart(2, "0");
-    addStay({ person, startDate: `${viewYear}-${mm}-${dd}`, nights, guest: guest.trim() || undefined });
+    addStay({
+      person: cost > 0 ? undefined : person,
+      startDate: `${viewYear}-${mm}-${dd}`,
+      nights,
+      guest: guest.trim() || undefined,
+      cost,
+    });
     setModal(null);
   }
 
@@ -72,6 +88,10 @@ export default function SchedulingPage() {
   }
 
   const modalDateLabel = modal ? `${MONTHS[viewMonth - 1]} ${modal.day}, ${viewYear}` : "";
+  const ownerPeople = people.filter(p => p.type === "owner");
+  const paidPeople  = people.filter(p => p.type === "paid");
+  const chipPeople  = cost > 0 ? paidPeople : ownerPeople;
+  const confirmBg   = cost > 0 ? PAID.solid : personColors(person).solid;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -124,11 +144,7 @@ export default function SchedulingPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, flexShrink: 0 }}>
               {DOW.map(d => (
-                <div
-                  key={d}
-                  className="flex items-center justify-center text-[10.5px] font-medium uppercase tracking-[0.06em]"
-                  style={{ height: 28, color: "#9e9b93" }}
-                >
+                <div key={d} className="flex items-center justify-center text-[10.5px] font-medium uppercase tracking-[0.06em]" style={{ height: 28, color: "#9e9b93" }}>
                   {d}
                 </div>
               ))}
@@ -136,13 +152,7 @@ export default function SchedulingPage() {
 
             <div
               className="flex-1 min-h-0"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(7, 1fr)",
-                gridTemplateRows: `repeat(${numRows}, 1fr)`,
-                gap: 4,
-                marginTop: 4,
-              }}
+              style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: `repeat(${numRows}, 1fr)`, gap: 4, marginTop: 4 }}
             >
               {Array(firstDow).fill(null).map((_, i) => <div key={`e${i}`} />)}
               {Array.from({ length: totalDays }, (_, i) => i + 1).map(day => {
@@ -169,23 +179,21 @@ export default function SchedulingPage() {
 
             <div className="flex items-center gap-4 pt-4 mt-4" style={{ borderTop: "1px solid #e4e2dc", flexShrink: 0 }}>
               {[
-                { label: "Travis", ...TRAVIS.legend },
-                { label: "Briana", ...BRIANA.legend },
+                { label: "Travis",     ...TRAVIS.legend },
+                { label: "Briana",     ...BRIANA.legend },
+                { label: "Paid Guest", ...PAID.legend   },
               ].map(({ label, bg, border }) => (
                 <div key={label} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#6b6960" }}>
                   <span className="rounded" style={{ width: 10, height: 10, background: bg, border, display: "inline-block" }} />
                   {label}
                 </div>
               ))}
-              <span className="ml-auto text-[11px]" style={{ color: "#9e9b93" }}>Click any day to add or view a stay</span>
+              <span className="ml-auto text-[11px]" style={{ color: "#9e9b93" }}>Click any day</span>
             </div>
           </div>
 
           {/* Stays list */}
-          <div
-            className="bg-white border border-[#e4e2dc] rounded-xl flex flex-col"
-            style={{ width: 300, flexShrink: 0, padding: "20px", overflowY: "auto" }}
-          >
+          <div className="bg-white border border-[#e4e2dc] rounded-xl flex flex-col" style={{ width: 300, flexShrink: 0, padding: "20px", overflowY: "auto" }}>
             <div className="text-[13.5px] font-semibold mb-4" style={{ color: "#1c1c1a" }}>All Stays</div>
 
             {upcoming.length > 0 && (
@@ -193,16 +201,16 @@ export default function SchedulingPage() {
                 <div className="text-[10px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Upcoming</div>
                 <div className="flex flex-col gap-2">
                   {upcoming.map(s => {
-                    const c = personColors(s.person);
+                    const c = stayColors(s);
+                    const label = s.guest || (s.cost > 0 ? "Paid guest" : s.person);
+                    const sub   = s.cost > 0 ? `$${s.cost} · ` : s.guest ? `${s.person} · ` : "";
                     return (
                       <div key={s.id} className="flex items-center gap-2.5 rounded-xl" style={{ padding: "10px 12px", background: c.bg }}>
                         <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, background: c.solid }} />
                         <div className="flex-1 min-w-0">
-                          <div className="text-[12.5px] font-medium truncate" style={{ color: "#1c1c1a" }}>
-                            {s.guest || s.person}
-                          </div>
+                          <div className="text-[12.5px] font-medium truncate" style={{ color: "#1c1c1a" }}>{label}</div>
                           <div className="text-[11px] mt-0.5 truncate" style={{ color: "#6b6960" }}>
-                            {s.guest ? `${s.person} · ` : ""}{formatStayRange(s)} · {s.nights}n
+                            {sub}{formatStayRange(s)} · {s.nights}n
                           </div>
                         </div>
                         <button
@@ -225,28 +233,30 @@ export default function SchedulingPage() {
               <div>
                 <div className="text-[10px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Past</div>
                 <div className="flex flex-col gap-2">
-                  {past.map(s => (
-                    <div key={s.id} className="flex items-center gap-2.5 rounded-xl" style={{ padding: "10px 12px", background: "#f4f3f0" }}>
-                      <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, background: "#9e9b93" }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[12.5px] font-medium truncate" style={{ color: "#6b6960" }}>
-                          {s.guest || s.person}
+                  {past.map(s => {
+                    const label = s.guest || (s.cost > 0 ? "Paid guest" : s.person);
+                    const sub   = s.cost > 0 ? `$${s.cost} · ` : s.guest ? `${s.person} · ` : "";
+                    return (
+                      <div key={s.id} className="flex items-center gap-2.5 rounded-xl" style={{ padding: "10px 12px", background: "#f4f3f0" }}>
+                        <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, background: "#9e9b93" }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[12.5px] font-medium truncate" style={{ color: "#6b6960" }}>{label}</div>
+                          <div className="text-[11px] mt-0.5 truncate" style={{ color: "#9e9b93" }}>
+                            {sub}{formatStayRange(s)} · {s.nights}n
+                          </div>
                         </div>
-                        <div className="text-[11px] mt-0.5 truncate" style={{ color: "#9e9b93" }}>
-                          {s.guest ? `${s.person} · ` : ""}{formatStayRange(s)} · {s.nights}n
-                        </div>
+                        <button
+                          className="flex items-center justify-center rounded-lg flex-shrink-0"
+                          style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#9e9b93" }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(185,50,40,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#b93228"; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "#9e9b93"; }}
+                          onClick={() => removeStay(s.id)}
+                        >
+                          <IconTrash size={13} strokeWidth={2} />
+                        </button>
                       </div>
-                      <button
-                        className="flex items-center justify-center rounded-lg flex-shrink-0"
-                        style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#9e9b93" }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(185,50,40,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#b93228"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "#9e9b93"; }}
-                        onClick={() => removeStay(s.id)}
-                      >
-                        <IconTrash size={13} strokeWidth={2} />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -271,7 +281,7 @@ export default function SchedulingPage() {
             <div className="flex items-start justify-between mb-5">
               <div>
                 <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
-                  {modal.existing ? "Stay details" : "Claim this day"}
+                  {modal.existing ? "Stay details" : "Add a stay"}
                 </div>
                 <div className="text-[12px] mt-0.5" style={{ color: "#9e9b93" }}>{modalDateLabel}</div>
               </div>
@@ -288,15 +298,15 @@ export default function SchedulingPage() {
               <>
                 <div
                   className="rounded-xl flex items-center gap-3 mb-5"
-                  style={{ padding: "14px 16px", background: personColors(modal.existing.person).bg }}
+                  style={{ padding: "14px 16px", background: stayColors(modal.existing).bg }}
                 >
-                  <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: personColors(modal.existing.person).solid }} />
+                  <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: stayColors(modal.existing).solid }} />
                   <div>
                     <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>
-                      {modal.existing.guest || modal.existing.person}
+                      {modal.existing.guest || (modal.existing.cost > 0 ? "Paid guest" : modal.existing.person)}
                     </div>
                     <div className="text-[11.5px] mt-0.5" style={{ color: "#6b6960" }}>
-                      {modal.existing.guest ? `${modal.existing.person} · ` : ""}
+                      {modal.existing.cost > 0 ? `$${modal.existing.cost} · ` : modal.existing.guest ? `${modal.existing.person} · ` : ""}
                       {modal.existing.nights} night{modal.existing.nights !== 1 ? "s" : ""} · {formatStayRange(modal.existing)}
                     </div>
                   </div>
@@ -320,28 +330,60 @@ export default function SchedulingPage() {
               </>
             ) : (
               <>
+                {/* Cost */}
                 <div className="mb-4">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Owner</div>
-                  <div className="flex gap-2">
-                    {(["Travis", "Briana"] as Person[]).map(p => {
-                      const c = personColors(p);
-                      return (
-                        <button
-                          key={p}
-                          className="flex-1 py-2 rounded-xl text-[13px] font-medium transition-all duration-150"
-                          style={{
-                            border: "none", cursor: "pointer",
-                            background: person === p ? c.bg : "#f4f3f0",
-                            color:      person === p ? c.text : "#6b6960",
-                          }}
-                          onClick={() => setPerson(p)}
-                        >
-                          {p}
-                        </button>
-                      );
-                    })}
+                  <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>
+                    Cost <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>($0 = owner stay)</span>
                   </div>
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9e9b93", fontSize: 13, pointerEvents: "none" }}>$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={costInput}
+                      onChange={e => handleCostChange(e.target.value)}
+                      onFocus={e => { if (e.target.value === "0") setCostInput(""); }}
+                      onBlur={e  => { if (e.target.value === "") { setCostInput("0"); setCost(0); } }}
+                      style={{
+                        width: "100%", padding: "9px 12px 9px 26px", border: "1px solid #e4e2dc",
+                        borderRadius: 10, background: cost > 0 ? "rgba(201,168,76,0.07)" : "#fafaf9",
+                        color: "#1c1c1a", fontSize: 13, outline: "none",
+                        fontFamily: "var(--font-inter), sans-serif",
+                        boxSizing: "border-box", transition: "background 0.15s",
+                      }}
+                    />
+                  </div>
+                  {cost > 0 && (
+                    <div className="text-[11px] mt-1.5" style={{ color: PAID.solid }}>
+                      Paid stay — not counted against owner allocation
+                    </div>
+                  )}
                 </div>
+
+                {cost === 0 && (
+                  <div className="mb-4">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>Owner</div>
+                    <div className="flex gap-2">
+                      {(["Travis", "Briana"] as Person[]).map(p => {
+                        const c = personColors(p);
+                        return (
+                          <button
+                            key={p}
+                            className="flex-1 py-2 rounded-xl text-[13px] font-medium transition-all duration-150"
+                            style={{
+                              border: "none", cursor: "pointer",
+                              background: person === p ? c.bg : "#f4f3f0",
+                              color:      person === p ? c.text : "#6b6960",
+                            }}
+                            onClick={() => setPerson(p)}
+                          >
+                            {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mb-4">
                   <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-2" style={{ color: "#9e9b93" }}>
@@ -351,18 +393,17 @@ export default function SchedulingPage() {
                     type="text"
                     value={guest}
                     onChange={e => setGuest(e.target.value)}
-                    placeholder="Leave blank for personal stay"
+                    placeholder={cost > 0 ? "Guest or group name" : "Leave blank for personal stay"}
                     style={{
                       width: "100%", padding: "9px 12px", border: "1px solid #e4e2dc",
                       borderRadius: 10, background: "#fafaf9", color: "#1c1c1a",
                       fontSize: 13, outline: "none",
-                      fontFamily: "var(--font-inter), sans-serif",
-                      boxSizing: "border-box",
+                      fontFamily: "var(--font-inter), sans-serif", boxSizing: "border-box",
                     }}
                   />
-                  {people.length > 0 && (
+                  {chipPeople.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {people.map(p => (
+                      {chipPeople.map(p => (
                         <button
                           key={p.id}
                           onClick={() => setGuest(g => g === p.name ? "" : p.name)}
@@ -411,11 +452,7 @@ export default function SchedulingPage() {
                   </button>
                   <button
                     className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
-                    style={{
-                      border: "none", cursor: "pointer",
-                      background: personColors(person).solid,
-                      color: "#fff",
-                    }}
+                    style={{ border: "none", cursor: "pointer", background: confirmBg, color: "#fff" }}
                     onClick={handleConfirm}
                   >
                     Confirm
