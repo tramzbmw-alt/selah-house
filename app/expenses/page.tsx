@@ -1,10 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { IconReceipt2, IconPlus, IconPencil, IconTrash, IconX } from "@tabler/icons-react";
+import { IconReceipt2, IconPlus, IconPencil, IconTrash, IconX, IconCheck } from "@tabler/icons-react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
-import { useExpenses, type Expense, type ExpenseCategory, type ExpensePaidBy, EXPENSE_CATEGORIES } from "@/context/ExpensesContext";
+import {
+  useExpenses,
+  type Expense,
+  type ExpenseCategory,
+  type ExpensePaidBy,
+  type ExpenseStatus,
+  type ExpenseRecurrence,
+  EXPENSE_CATEGORIES,
+  EXPENSE_RECURRENCES,
+} from "@/context/ExpensesContext";
 import { MONTHS, MONTHS_SHORT, TRAVIS, BRIANA } from "@/lib/stayUtils";
 
 function localDate(d = new Date()) {
@@ -44,46 +53,74 @@ const LBL: React.CSSProperties = {
   marginBottom: 6, color: "#9e9b93",
 };
 
+type TabFilter = "All" | "Unpaid" | "Paid";
+
 export default function ExpensesPage() {
-  const { expenses, addExpense, updateExpense, removeExpense } = useExpenses();
+  const { expenses, addExpense, updateExpense, removeExpense, markPaid } = useExpenses();
 
   const now = new Date();
   const cm  = now.getMonth() + 1;
   const cy  = now.getFullYear();
 
-  const monthExpenses = expenses
-    .filter(e => {
-      const d = new Date(e.datePaid + "T12:00:00");
-      return d.getFullYear() === cy && d.getMonth() + 1 === cm;
-    })
-    .sort((a, b) => new Date(b.datePaid).getTime() - new Date(a.datePaid).getTime());
+  // Current-month summary (always by dueDate, regardless of active tab)
+  const currentMonthExpenses = expenses.filter(e => {
+    const d = new Date(e.dueDate + "T12:00:00");
+    return d.getFullYear() === cy && d.getMonth() + 1 === cm;
+  });
+  const totalBilled = currentMonthExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalPaid   = currentMonthExpenses.filter(e => e.status === "Paid").reduce((s, e) => s + e.amount, 0);
+  const totalUnpaid = totalBilled - totalPaid;
 
-  const totalMonth  = monthExpenses.reduce((s, e) => s + e.amount, 0);
-  const travisTotal = monthExpenses.filter(e => e.paidBy === "Travis").reduce((s, e) => s + e.amount, 0);
-  const brianaTotal = monthExpenses.filter(e => e.paidBy === "Briana").reduce((s, e) => s + e.amount, 0);
-
+  // Category breakdown for current month (all statuses)
   const breakdown = EXPENSE_CATEGORIES
-    .map(cat => ({ cat, total: monthExpenses.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0) }))
+    .map(cat => ({ cat, total: currentMonthExpenses.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0) }))
     .filter(x => x.total > 0)
     .sort((a, b) => b.total - a.total);
 
-  // Modal state
+  // Sorted expense lists
+  const unpaidList = expenses
+    .filter(e => e.status === "Unpaid")
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  const paidList = expenses
+    .filter(e => e.status === "Paid")
+    .sort((a, b) => new Date(b.datePaid ?? b.dueDate).getTime() - new Date(a.datePaid ?? a.dueDate).getTime());
+
+  const [tabFilter, setTabFilter] = useState<TabFilter>("All");
+
+  const displayExpenses: Expense[] =
+    tabFilter === "Unpaid" ? unpaidList :
+    tabFilter === "Paid"   ? paidList   :
+    [...unpaidList, ...paidList];
+
+  // ── Add/Edit modal state ──────────────────────────────────────────
   const [showModal,    setShowModal]    = useState(false);
   const [editId,       setEditId]       = useState<string | null>(null);
   const [category,     setCategory]     = useState<ExpenseCategory>("Miscellaneous");
   const [description,  setDescription]  = useState("");
   const [amount,       setAmount]       = useState("");
-  const [datePaid,     setDatePaid]     = useState(localDate());
+  const [dueDate,      setDueDate]      = useState(localDate());
+  const [recurrence,   setRecurrence]   = useState<ExpenseRecurrence>("One-time");
+  const [modalStatus,  setModalStatus]  = useState<ExpenseStatus>("Unpaid");
   const [paidBy,       setPaidBy]       = useState<ExpensePaidBy>("Travis");
+  const [datePaid,     setDatePaid]     = useState(localDate());
   const [notes,        setNotes]        = useState("");
+
+  // ── Mark-as-Paid mini-modal state ────────────────────────────────
+  const [markingId,    setMarkingId]    = useState<string | null>(null);
+  const [markPaidBy,   setMarkPaidBy]   = useState<ExpensePaidBy>("Travis");
+  const [markPaidDate, setMarkPaidDate] = useState(localDate());
 
   function openAdd() {
     setEditId(null);
     setCategory("Miscellaneous");
     setDescription("");
     setAmount("");
-    setDatePaid(localDate());
+    setDueDate(localDate());
+    setRecurrence("One-time");
+    setModalStatus("Unpaid");
     setPaidBy("Travis");
+    setDatePaid(localDate());
     setNotes("");
     setShowModal(true);
   }
@@ -93,8 +130,11 @@ export default function ExpensesPage() {
     setCategory(e.category);
     setDescription(e.description);
     setAmount(String(e.amount));
-    setDatePaid(e.datePaid);
-    setPaidBy(e.paidBy);
+    setDueDate(e.dueDate);
+    setRecurrence(e.recurrence);
+    setModalStatus(e.status);
+    setPaidBy(e.paidBy ?? "Travis");
+    setDatePaid(e.datePaid ?? localDate());
     setNotes(e.notes ?? "");
     setShowModal(true);
   }
@@ -105,10 +145,16 @@ export default function ExpensesPage() {
   }
 
   function handleSave() {
-    if (!description.trim() || !amount) return;
-    const data = {
-      category, description: description.trim(),
-      amount: parseFloat(amount), datePaid, paidBy,
+    if (!description.trim() || !amount || !dueDate) return;
+    const data: Omit<Expense, "id"> = {
+      category,
+      description: description.trim(),
+      amount: parseFloat(amount),
+      dueDate,
+      status: modalStatus,
+      recurrence,
+      paidBy:   modalStatus === "Paid" ? paidBy   : undefined,
+      datePaid: modalStatus === "Paid" ? datePaid  : undefined,
       notes: notes.trim() || undefined,
     };
     if (editId) updateExpense(editId, data);
@@ -121,7 +167,20 @@ export default function ExpensesPage() {
     closeModal();
   }
 
-  const canSave = description.trim() && amount && parseFloat(amount) > 0;
+  function openMarkPaid(exp: Expense) {
+    setMarkingId(exp.id);
+    setMarkPaidBy("Travis");
+    setMarkPaidDate(localDate());
+  }
+
+  function confirmMarkPaid() {
+    if (markingId) {
+      markPaid(markingId, markPaidBy, markPaidDate);
+      setMarkingId(null);
+    }
+  }
+
+  const canSave = description.trim() && amount && parseFloat(amount) > 0 && dueDate;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -152,12 +211,12 @@ export default function ExpensesPage() {
               </button>
             </div>
 
-            {/* Summary row */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            {/* Monthly summary */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
               {[
-                { label: "Total this month", value: fmtAmt(totalMonth), dot: "#9e9b93" },
-                { label: "Travis paid",      value: fmtAmt(travisTotal), dot: TRAVIS.solid },
-                { label: "Briana paid",      value: fmtAmt(brianaTotal), dot: BRIANA.solid },
+                { label: "Total billed",     value: fmtAmt(totalBilled),  dot: "#9e9b93" },
+                { label: "Total paid",        value: fmtAmt(totalPaid),    dot: "#3b9e95" },
+                { label: "Remaining unpaid",  value: fmtAmt(totalUnpaid),  dot: totalUnpaid > 0 ? "#C9A84C" : "#9e9b93" },
               ].map(({ label, value, dot }) => (
                 <div
                   key={label}
@@ -171,7 +230,41 @@ export default function ExpensesPage() {
               ))}
             </div>
 
-            {/* Category breakdown */}
+            {/* Filter tabs */}
+            <div className="flex gap-1.5 mb-5">
+              {(["All", "Unpaid", "Paid"] as TabFilter[]).map(f => {
+                const count = f === "All" ? expenses.length : expenses.filter(e => e.status === f).length;
+                const active = tabFilter === f;
+                return (
+                  <button
+                    key={f}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-medium"
+                    style={{
+                      border: "none", cursor: "pointer",
+                      background: active ? "#1c1c1a" : "#f0ede8",
+                      color:      active ? "#fff"    : "#6b6960",
+                    }}
+                    onClick={() => setTabFilter(f)}
+                  >
+                    {f}
+                    {count > 0 && (
+                      <span style={{
+                        marginLeft: "2px",
+                        padding: "2px 6px",
+                        borderRadius: 10,
+                        backgroundColor: active ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)",
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Category breakdown (current month) */}
             {breakdown.length > 0 && (
               <>
                 <div className="mb-3">
@@ -180,7 +273,7 @@ export default function ExpensesPage() {
                 </div>
                 <div className="flex flex-col gap-2.5 mb-6">
                   {breakdown.map(({ cat, total }) => {
-                    const pct = totalMonth > 0 ? (total / totalMonth) * 100 : 0;
+                    const pct = totalBilled > 0 ? (total / totalBilled) * 100 : 0;
                     const c = CAT_STYLE[cat];
                     return (
                       <div key={cat} className="flex items-center gap-3">
@@ -199,29 +292,34 @@ export default function ExpensesPage() {
             {/* Divider */}
             <div style={{ height: 1, background: "#f0ede8", marginBottom: 16 }} />
 
-            {/* Expense list header */}
+            {/* List header */}
             <div className="text-[12.5px] font-semibold mb-3" style={{ color: "#1c1c1a" }}>
-              {MONTHS[cm - 1]} {cy}
+              {tabFilter === "All"    ? "All Expenses" :
+               tabFilter === "Unpaid" ? "Upcoming Bills" : "Payment History"}
               <span className="ml-2 text-[11px] font-normal" style={{ color: "#9e9b93" }}>
-                {monthExpenses.length} expense{monthExpenses.length !== 1 ? "s" : ""}
+                {displayExpenses.length} {displayExpenses.length !== 1 ? "entries" : "entry"}
               </span>
             </div>
 
             {/* Expense rows */}
-            {monthExpenses.length === 0 ? (
+            {displayExpenses.length === 0 ? (
               <div className="text-center py-8 text-[13px]" style={{ color: "#9e9b93" }}>
-                No expenses logged for {MONTHS[cm - 1]}. Add one above.
+                {tabFilter === "Unpaid" ? "No upcoming bills." :
+                 tabFilter === "Paid"   ? "No payment history yet." :
+                 "No expenses logged. Add one above."}
               </div>
             ) : (
               <div className="flex flex-col">
-                {monthExpenses.map((exp, idx) => {
-                  const c = CAT_STYLE[exp.category];
+                {displayExpenses.map((exp, idx) => {
+                  const c  = CAT_STYLE[exp.category];
                   const pb = exp.paidBy === "Travis" ? TRAVIS : BRIANA;
+                  const isLast = idx === displayExpenses.length - 1;
+
                   return (
                     <div
                       key={exp.id}
                       className="flex items-center gap-3 py-3"
-                      style={{ borderBottom: idx < monthExpenses.length - 1 ? "1px solid #f0ede8" : "none" }}
+                      style={{ borderBottom: isLast ? "none" : "1px solid #f0ede8" }}
                     >
                       {/* Category badge */}
                       <span
@@ -231,29 +329,52 @@ export default function ExpensesPage() {
                         {exp.category}
                       </span>
 
-                      {/* Description + date */}
+                      {/* Description + meta */}
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-medium truncate" style={{ color: "#1c1c1a" }}>{exp.description}</div>
                         <div className="text-[11.5px] mt-0.5" style={{ color: "#9e9b93" }}>
-                          {fmtDate(exp.datePaid)}
+                          {exp.status === "Paid" ? (
+                            <>Paid {exp.datePaid ? fmtDate(exp.datePaid) : "—"}</>
+                          ) : (
+                            <>Due {fmtDate(exp.dueDate)}</>
+                          )}
+                          {exp.recurrence !== "One-time" && (
+                            <span> · {exp.recurrence}</span>
+                          )}
                           {exp.notes && <span> · {exp.notes}</span>}
                         </div>
                       </div>
 
-                      {/* Paid by chip */}
-                      <span
-                        className="text-[10.5px] font-medium px-2.5 py-1 rounded-full flex-shrink-0"
-                        style={{ background: pb.bg, color: pb.text }}
-                      >
-                        {exp.paidBy}
-                      </span>
+                      {/* Paid-by chip (Paid only) */}
+                      {exp.status === "Paid" && exp.paidBy && (
+                        <span
+                          className="text-[10.5px] font-medium px-2.5 py-1 rounded-full flex-shrink-0"
+                          style={{ background: pb.bg, color: pb.text }}
+                        >
+                          {exp.paidBy}
+                        </span>
+                      )}
 
                       {/* Amount */}
                       <div className="text-[13.5px] font-semibold flex-shrink-0" style={{ color: "#1c1c1a", minWidth: 60, textAlign: "right" }}>
                         {fmtAmt(exp.amount)}
                       </div>
 
-                      {/* Actions */}
+                      {/* Mark as Paid button (Unpaid only) */}
+                      {exp.status === "Unpaid" && (
+                        <button
+                          className="flex items-center gap-1 text-[11.5px] font-medium px-3 py-1.5 rounded-full flex-shrink-0"
+                          style={{ background: "rgba(59,158,149,0.1)", color: "#3b9e95", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "rgba(59,158,149,0.2)")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "rgba(59,158,149,0.1)")}
+                          onClick={() => openMarkPaid(exp)}
+                        >
+                          <IconCheck size={11} strokeWidth={2.5} />
+                          Mark paid
+                        </button>
+                      )}
+
+                      {/* Edit / Delete */}
                       <div className="flex gap-1 flex-shrink-0">
                         <button
                           className="flex items-center justify-center rounded-lg"
@@ -285,7 +406,7 @@ export default function ExpensesPage() {
         </main>
       </div>
 
-      {/* Modal */}
+      {/* ── Add/Edit modal ─────────────────────────────────────────── */}
       {showModal && (
         <div
           className="fixed inset-0 flex items-center justify-center"
@@ -294,9 +415,8 @@ export default function ExpensesPage() {
         >
           <div
             className="bg-white rounded-2xl"
-            style={{ width: 400, maxHeight: "90vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}
+            style={{ width: 420, maxHeight: "92vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}
           >
-            {/* Modal header */}
             <div className="flex items-center justify-between mb-5">
               <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
                 {editId ? "Edit expense" : "New expense"}
@@ -337,7 +457,7 @@ export default function ExpensesPage() {
                 />
               </div>
 
-              {/* Amount + Date */}
+              {/* Amount + Due date */}
               <div className="flex gap-2">
                 <div className="flex-1">
                   <label style={LBL}>Amount</label>
@@ -355,39 +475,90 @@ export default function ExpensesPage() {
                   </div>
                 </div>
                 <div className="flex-1">
-                  <label style={LBL}>Date paid</label>
+                  <label style={LBL}>Due date</label>
                   <input
                     type="date"
-                    value={datePaid}
-                    onChange={e => setDatePaid(e.target.value)}
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
                     style={IN}
                   />
                 </div>
               </div>
 
-              {/* Paid by */}
+              {/* Recurrence */}
               <div>
-                <label style={LBL}>Paid by</label>
+                <label style={LBL}>Recurrence</label>
+                <select
+                  value={recurrence}
+                  onChange={e => setRecurrence(e.target.value as ExpenseRecurrence)}
+                  style={{ ...IN, appearance: "auto" as any }}
+                >
+                  {EXPENSE_RECURRENCES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+
+              {/* Status toggle */}
+              <div>
+                <label style={LBL}>Status</label>
                 <div className="flex gap-2">
-                  {(["Travis", "Briana"] as ExpensePaidBy[]).map(p => {
-                    const c = p === "Travis" ? TRAVIS : BRIANA;
-                    return (
-                      <button
-                        key={p}
-                        className="flex-1 py-2 rounded-xl text-[13px] font-medium transition-all duration-150"
-                        style={{
-                          border: "none", cursor: "pointer",
-                          background: paidBy === p ? c.bg : "#f4f3f0",
-                          color:      paidBy === p ? c.text : "#6b6960",
-                        }}
-                        onClick={() => setPaidBy(p)}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
+                  {(["Unpaid", "Paid"] as ExpenseStatus[]).map(s => (
+                    <button
+                      key={s}
+                      className="flex-1 py-2 rounded-xl text-[13px] font-medium"
+                      style={{
+                        border: "none", cursor: "pointer",
+                        background: modalStatus === s
+                          ? s === "Paid" ? "rgba(59,158,149,0.12)" : "rgba(201,168,76,0.15)"
+                          : "#f4f3f0",
+                        color: modalStatus === s
+                          ? s === "Paid" ? "#16645d" : "#7a5e10"
+                          : "#6b6960",
+                      }}
+                      onClick={() => setModalStatus(s)}
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              {/* Paid-by + Date paid (only when Paid) */}
+              {modalStatus === "Paid" && (
+                <>
+                  <div>
+                    <label style={LBL}>Paid by</label>
+                    <div className="flex gap-2">
+                      {(["Travis", "Briana"] as ExpensePaidBy[]).map(p => {
+                        const col = p === "Travis" ? TRAVIS : BRIANA;
+                        return (
+                          <button
+                            key={p}
+                            className="flex-1 py-2 rounded-xl text-[13px] font-medium transition-all duration-150"
+                            style={{
+                              border: "none", cursor: "pointer",
+                              background: paidBy === p ? col.bg : "#f4f3f0",
+                              color:      paidBy === p ? col.text : "#6b6960",
+                            }}
+                            onClick={() => setPaidBy(p)}
+                          >
+                            {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={LBL}>Date paid</label>
+                    <input
+                      type="date"
+                      value={datePaid}
+                      onChange={e => setDatePaid(e.target.value)}
+                      style={IN}
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Notes */}
               <div>
@@ -434,6 +605,83 @@ export default function ExpensesPage() {
                     Delete expense
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mark-as-Paid mini-modal ────────────────────────────────── */}
+      {markingId && (
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
+          onClick={e => { if (e.target === e.currentTarget) setMarkingId(null); }}
+        >
+          <div
+            className="bg-white rounded-2xl"
+            style={{ width: 320, padding: "24px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div className="text-[14px] font-semibold" style={{ color: "#1c1c1a" }}>Mark as Paid</div>
+              <button
+                onClick={() => setMarkingId(null)}
+                className="flex items-center justify-center rounded-full"
+                style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}
+              >
+                <IconX size={14} strokeWidth={2} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label style={LBL}>Who paid?</label>
+                <div className="flex gap-2">
+                  {(["Travis", "Briana"] as ExpensePaidBy[]).map(p => {
+                    const col = p === "Travis" ? TRAVIS : BRIANA;
+                    return (
+                      <button
+                        key={p}
+                        className="flex-1 py-2 rounded-xl text-[13px] font-medium"
+                        style={{
+                          border: "none", cursor: "pointer",
+                          background: markPaidBy === p ? col.bg : "#f4f3f0",
+                          color:      markPaidBy === p ? col.text : "#6b6960",
+                        }}
+                        onClick={() => setMarkPaidBy(p)}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label style={LBL}>Date paid</label>
+                <input
+                  type="date"
+                  value={markPaidDate}
+                  onChange={e => setMarkPaidDate(e.target.value)}
+                  style={IN}
+                />
+              </div>
+
+              <div className="flex gap-2 mt-1">
+                <button
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                  style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }}
+                  onClick={() => setMarkingId(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                  style={{ background: "#3b9e95", color: "#fff", border: "none", cursor: "pointer" }}
+                  onClick={confirmMarkPaid}
+                >
+                  Confirm
+                </button>
               </div>
             </div>
           </div>

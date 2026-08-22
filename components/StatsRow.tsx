@@ -47,13 +47,15 @@ export default function StatsRow() {
   const taskSub      = overdueTasks > 0 ? `${overdueTasks} overdue` : openTasks === 0 ? "All clear" : "all on track";
 
   const monthExpenses = expenses.filter(e => {
-    const d = new Date(e.datePaid + "T12:00:00");
+    const d = new Date(e.dueDate + "T12:00:00");
     return d.getFullYear() === cy && d.getMonth() + 1 === cm;
   });
-  const monthTotal = monthExpenses.reduce((s, e) => s + e.amount, 0);
-  const expLabel   = `${MONTHS_SHORT[now.getMonth()]} Expenses`;
-  const expValue   = "$" + (monthTotal % 1 === 0 ? monthTotal.toLocaleString() : monthTotal.toFixed(2));
-  const expSub     = monthExpenses.length === 0 ? "none logged" : `${monthExpenses.length} expense${monthExpenses.length !== 1 ? "s" : ""}`;
+  const paidThisMonth = monthExpenses.filter(e => e.status === "Paid");
+  const monthTotal    = paidThisMonth.reduce((s, e) => s + e.amount, 0);
+  const expLabel      = `${MONTHS_SHORT[now.getMonth()]} Expenses`;
+  const expValue      = "$" + (monthTotal % 1 === 0 ? monthTotal.toLocaleString() : monthTotal.toFixed(2));
+  const expSub        = paidThisMonth.length === 0 ? "none paid yet"
+                      : `${paidThisMonth.length} of ${monthExpenses.length} paid`;
 
   const STATS = [
     {
@@ -74,7 +76,11 @@ export default function StatsRow() {
       sub:   taskSub,
       dot:   overdueTasks > 0 ? "red" : openTasks === 0 ? "briana" : "gray",
     },
-    { label: expLabel, value: expValue, sub: expSub, dot: "gray" },
+    {
+      label: expLabel, value: expValue, sub: expSub,
+      dot: paidThisMonth.length === monthExpenses.length && monthExpenses.length > 0 ? "briana"
+         : paidThisMonth.length > 0 ? "paid" : "gray",
+    },
   ];
 
   return (
