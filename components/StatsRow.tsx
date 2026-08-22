@@ -1,6 +1,7 @@
 "use client";
 
 import { useStays } from "@/context/StaysContext";
+import { useMaintenance, deriveStatus } from "@/context/MaintenanceContext";
 import { getUpcomingStays, formatShortDate } from "@/lib/stayUtils";
 
 const DOT: Record<string, string> = {
@@ -29,10 +30,15 @@ function staySub(s: ReturnType<typeof getUpcomingStays>[number] | undefined, emp
 }
 
 export default function StatsRow() {
-  const { stays } = useStays();
-  const upcoming  = getUpcomingStays(stays);
-  const next      = upcoming[0];
-  const after     = upcoming[1];
+  const { stays }  = useStays();
+  const { tasks }  = useMaintenance();
+  const upcoming   = getUpcomingStays(stays);
+  const next       = upcoming[0];
+  const after      = upcoming[1];
+
+  const openTasks    = tasks.filter(t => deriveStatus(t) !== "Done").length;
+  const overdueTasks = tasks.filter(t => deriveStatus(t) === "Overdue").length;
+  const taskSub      = overdueTasks > 0 ? `${overdueTasks} overdue` : openTasks === 0 ? "All clear" : "all on track";
 
   const STATS = [
     {
@@ -47,7 +53,12 @@ export default function StatsRow() {
       sub:   staySub(after, "Nothing yet"),
       dot:   stayDot(after),
     },
-    { label: "Open Tasks",   value: "2",      sub: "1 overdue",            dot: "red"  },
+    {
+      label: "Open Tasks",
+      value: String(openTasks),
+      sub:   taskSub,
+      dot:   overdueTasks > 0 ? "red" : openTasks === 0 ? "briana" : "gray",
+    },
     { label: "Aug Expenses", value: "$3,190", sub: "mortgage + utilities", dot: "gray" },
   ];
 

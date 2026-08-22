@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { IconCalendarEvent, IconChevronLeft, IconChevronRight, IconTrash, IconX } from "@tabler/icons-react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { useStays, type StayPerson, type Stay } from "@/context/StaysContext";
 import { usePeople } from "@/context/PeopleContext";
+import { useMaintenance, deriveStatus, type TaskStatus } from "@/context/MaintenanceContext";
 import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, BOTH, PAID, stayColors, personColors, formatStayRange, formatShortDate } from "@/lib/stayUtils";
+
+const MAINT_DOT: Partial<Record<TaskStatus, string>> = {
+  Overdue:  "#b93228",
+  Pending:  "#c08040",
+  Upcoming: "#9e9b93",
+};
 
 function getDayStyle(stay: Stay | undefined, isToday: boolean) {
   let bg = "#f4f3f0", color = "#6b6960", border = "none" as string, fontWeight = 400;
@@ -23,10 +30,25 @@ type ModalState = { day: number; existing?: Stay; editing?: boolean };
 export default function SchedulingPage() {
   const { stays, addStay, updateStay, removeStay } = useStays();
   const { people } = usePeople();
+  const { tasks }  = useMaintenance();
 
   const now = new Date();
   const [viewYear,  setViewYear]  = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
+
+  const maintDays = useMemo(() => {
+    const map = new Map<number, TaskStatus[]>();
+    for (const task of tasks) {
+      const d = new Date(task.dueDate + "T12:00:00");
+      if (d.getFullYear() === viewYear && d.getMonth() + 1 === viewMonth) {
+        const day    = d.getDate();
+        const status = deriveStatus(task);
+        if (!map.has(day)) map.set(day, []);
+        map.get(day)!.push(status);
+      }
+    }
+    return map;
+  }, [tasks, viewYear, viewMonth]);
 
   const [modal,     setModal]     = useState<ModalState | null>(null);
   const [person,    setPerson]    = useState<StayPerson>("Travis");
@@ -174,9 +196,17 @@ export default function SchedulingPage() {
             <div className="flex-1 min-h-0" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: `repeat(${numRows}, 1fr)`, gap: 4, marginTop: 4 }}>
               {Array(firstDow).fill(null).map((_, i) => <div key={`e${i}`} />)}
               {Array.from({ length: totalDays }, (_, i) => i + 1).map(day => {
-                const stay  = occupied.get(day);
-                const s     = getDayStyle(stay, day === todayDay);
-                const label = stay?.guest ? stay.guest.split(" ")[0] : null;
+                const stay      = occupied.get(day);
+                const s         = getDayStyle(stay, day === todayDay);
+                const label     = stay?.guest ? stay.guest.split(" ")[0] : null;
+                const mStatuses = maintDays.get(day) ?? [];
+                const dotColor  = mStatuses.includes("Overdue")
+                  ? MAINT_DOT.Overdue
+                  : mStatuses.includes("Pending")
+                  ? MAINT_DOT.Pending
+                  : mStatuses.includes("Upcoming")
+                  ? MAINT_DOT.Upcoming
+                  : null;
                 return (
                   <div
                     key={day}
@@ -186,6 +216,7 @@ export default function SchedulingPage() {
                   >
                     <span style={{ fontSize: 13 }}>{day}</span>
                     {label && <span style={{ fontSize: 9, lineHeight: 1.3, maxWidth: "88%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.85 }}>{label}</span>}
+                    {dotColor && <span style={{ width: 4, height: 4, borderRadius: "50%", background: dotColor, marginTop: 1, flexShrink: 0 }} />}
                   </div>
                 );
               })}
