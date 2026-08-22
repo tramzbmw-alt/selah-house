@@ -4,6 +4,7 @@ import { StaysProvider } from "@/context/StaysContext";
 import { PeopleProvider } from "@/context/PeopleContext";
 import { MaintenanceProvider } from "@/context/MaintenanceContext";
 import { ExpensesProvider } from "@/context/ExpensesContext";
+import { RevenueProvider } from "@/context/RevenueContext";
 import "./globals.css";
 
 const inter = Inter({
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${lora.variable}`}>
-      <body><ExpensesProvider><MaintenanceProvider><PeopleProvider><StaysProvider>{children}</StaysProvider></PeopleProvider></MaintenanceProvider></ExpensesProvider></body>
+      <body><ExpensesProvider><RevenueProvider><MaintenanceProvider><PeopleProvider><StaysProvider>{children}</StaysProvider></PeopleProvider></MaintenanceProvider></RevenueProvider></ExpensesProvider></body>
     </html>
   );
 }

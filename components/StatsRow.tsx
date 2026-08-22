@@ -1,6 +1,7 @@
 "use client";
 
 import { useStays } from "@/context/StaysContext";
+import { useRevenue } from "@/context/RevenueContext";
 import { useMaintenance, deriveStatus } from "@/context/MaintenanceContext";
 import { useExpenses } from "@/context/ExpensesContext";
 import { getUpcomingStays, formatShortDate, MONTHS_SHORT } from "@/lib/stayUtils";
@@ -12,6 +13,7 @@ const DOT: Record<string, string> = {
   paid:   "#C9A84C",
   red:    "#b93228",
   gray:   "#9e9b93",
+  teal:   "#3b9e95",
 };
 
 function stayDot(s: ReturnType<typeof getUpcomingStays>[number] | undefined) {
@@ -30,56 +32,89 @@ function staySub(s: ReturnType<typeof getUpcomingStays>[number] | undefined, emp
   return `${s.person} · ${s.nights} night${s.nights !== 1 ? "s" : ""}`;
 }
 
+function fmtAmt(n: number) {
+  return "$" + (n % 1 === 0 ? n.toLocaleString() : n.toFixed(2));
+}
+
 export default function StatsRow() {
-  const { stays }    = useStays();
-  const { tasks }    = useMaintenance();
-  const { expenses } = useExpenses();
-  const upcoming     = getUpcomingStays(stays);
-  const next         = upcoming[0];
-  const after        = upcoming[1];
+  const { stays }              = useStays();
+  const { entries, stayPayments } = useRevenue();
+  const { tasks }              = useMaintenance();
+  const { expenses }           = useExpenses();
+  const upcoming               = getUpcomingStays(stays);
+  const next                   = upcoming[0];
 
   const now = new Date();
   const cm  = now.getMonth() + 1;
   const cy  = now.getFullYear();
 
+  const inCurrMonth = (dateStr: string) => {
+    const d = new Date(dateStr + "T12:00:00");
+    return d.getFullYear() === cy && d.getMonth() + 1 === cm;
+  };
+
+  // Monthly Revenue: paid stay-derived + paid manual entries with checkIn in current month
+  const stayRevenue = stays
+    .filter(s => s.cost > 0 && inCurrMonth(s.startDate) && stayPayments[s.id]?.paymentStatus === "Paid")
+    .reduce((sum, s) => sum + s.cost, 0);
+
+  const manualRevenue = entries
+    .filter(e => e.paymentStatus === "Paid" && inCurrMonth(e.checkIn))
+    .reduce((sum, e) => sum + e.totalAmount, 0);
+
+  const monthRevenue     = stayRevenue + manualRevenue;
+  const revValue         = fmtAmt(monthRevenue);
+  const revLabel         = `${MONTHS_SHORT[now.getMonth()]} Revenue`;
+  const totalStays       = stays.filter(s => s.cost > 0 && inCurrMonth(s.startDate)).length
+                         + entries.filter(e => inCurrMonth(e.checkIn)).length;
+  const paidStays        = stays.filter(s => s.cost > 0 && inCurrMonth(s.startDate) && stayPayments[s.id]?.paymentStatus === "Paid").length
+                         + entries.filter(e => e.paymentStatus === "Paid" && inCurrMonth(e.checkIn)).length;
+  const revSub           = totalStays === 0 ? "no stays this month"
+                         : paidStays === totalStays ? "all paid"
+                         : `${paidStays} of ${totalStays} paid`;
+  const revDot           = totalStays === 0 ? "gray"
+                         : paidStays === totalStays ? "teal"
+                         : paidStays > 0 ? "paid" : "gray";
+
+  // Unpaid Bills: unpaid expenses for current month
+  const monthExpenses   = expenses.filter(e => inCurrMonth(e.dueDate));
+  const unpaidThisMonth = monthExpenses.filter(e => e.status === "Unpaid");
+  const unpaidTotal     = unpaidThisMonth.reduce((s, e) => s + e.amount, 0);
+  const billsValue      = unpaidThisMonth.length === 0 ? "—" : fmtAmt(unpaidTotal);
+  const billsSub        = unpaidThisMonth.length === 0 ? "all clear"
+                        : `${unpaidThisMonth.length} unpaid bill${unpaidThisMonth.length !== 1 ? "s" : ""}`;
+  const billsDot        = unpaidThisMonth.length === 0 ? "teal"
+                        : unpaidTotal > 500 ? "red" : "paid";
+
+  // Open Tasks
   const openTasks    = tasks.filter(t => deriveStatus(t) !== "Done").length;
   const overdueTasks = tasks.filter(t => deriveStatus(t) === "Overdue").length;
   const taskSub      = overdueTasks > 0 ? `${overdueTasks} overdue` : openTasks === 0 ? "All clear" : "all on track";
 
-  const monthExpenses = expenses.filter(e => {
-    const d = new Date(e.dueDate + "T12:00:00");
-    return d.getFullYear() === cy && d.getMonth() + 1 === cm;
-  });
-  const paidThisMonth = monthExpenses.filter(e => e.status === "Paid");
-  const monthTotal    = paidThisMonth.reduce((s, e) => s + e.amount, 0);
-  const expLabel      = `${MONTHS_SHORT[now.getMonth()]} Expenses`;
-  const expValue      = "$" + (monthTotal % 1 === 0 ? monthTotal.toLocaleString() : monthTotal.toFixed(2));
-  const expSub        = paidThisMonth.length === 0 ? "none paid yet"
-                      : `${paidThisMonth.length} of ${monthExpenses.length} paid`;
-
   const STATS = [
     {
-      label: "Next Stay",
-      value: next  ? formatShortDate(next.startDate)  : "—",
-      sub:   staySub(next,  "None scheduled"),
-      dot:   stayDot(next),
+      label: revLabel,
+      value: revValue,
+      sub:   revSub,
+      dot:   revDot,
     },
     {
-      label: "After That",
-      value: after ? formatShortDate(after.startDate) : "—",
-      sub:   staySub(after, "Nothing yet"),
-      dot:   stayDot(after),
+      label: "Unpaid Bills",
+      value: billsValue,
+      sub:   billsSub,
+      dot:   billsDot,
+    },
+    {
+      label: "Next Stay",
+      value: next ? formatShortDate(next.startDate) : "—",
+      sub:   staySub(next, "None scheduled"),
+      dot:   stayDot(next),
     },
     {
       label: "Open Tasks",
       value: String(openTasks),
       sub:   taskSub,
       dot:   overdueTasks > 0 ? "red" : openTasks === 0 ? "briana" : "gray",
-    },
-    {
-      label: expLabel, value: expValue, sub: expSub,
-      dot: paidThisMonth.length === monthExpenses.length && monthExpenses.length > 0 ? "briana"
-         : paidThisMonth.length > 0 ? "paid" : "gray",
     },
   ];
 

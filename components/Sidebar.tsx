@@ -7,6 +7,7 @@ import {
   IconCalendar,
   IconTool,
   IconReceipt2,
+  IconCurrencyDollar,
   IconFiles,
   IconAddressBook,
   IconUsers,
@@ -24,10 +25,11 @@ const NAV = [
   {
     section: "House",
     items: [
-      { icon: IconTool,        label: "Maintenance", href: "/maintenance" },
-      { icon: IconReceipt2,    label: "Expenses",    href: "/expenses"    },
-      { icon: IconFiles,       label: "Documents",   href: "/documents"   },
-      { icon: IconAddressBook, label: "Vendors",     href: "/vendors"     },
+      { icon: IconTool,            label: "Maintenance", href: "/maintenance" },
+      { icon: IconReceipt2,        label: "Expenses",    href: "/expenses"    },
+      { icon: IconCurrencyDollar,  label: "Revenue",     href: "/revenue"     },
+      { icon: IconFiles,           label: "Documents",   href: "/documents"   },
+      { icon: IconAddressBook,     label: "Vendors",     href: "/vendors"     },
     ],
   },
   {

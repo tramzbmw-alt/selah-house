@@ -24,8 +24,9 @@ type StaysCtx = {
 const Ctx = createContext<StaysCtx | null>(null);
 
 const SEED: Stay[] = [
-  { id: "seed-1", person: "Travis", startDate: "2026-08-18", nights: 5, cost: 0 },
-  { id: "seed-2", person: "Briana", startDate: "2026-09-04", nights: 3, cost: 0 },
+  { id: "seed-1", person: "Travis",  startDate: "2026-08-18", nights: 5, cost: 0 },
+  { id: "seed-2", person: "Briana",  startDate: "2026-09-04", nights: 3, cost: 0 },
+  { id: "seed-3", startDate: "2026-08-08", nights: 5, cost: 1250, guest: "Sarah & Mike" },
 ];
 
 export function StaysProvider({ children }: { children: ReactNode }) {
