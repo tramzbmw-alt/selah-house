@@ -556,7 +556,7 @@ export default function RevenuePage() {
             </div>
 
             {/* Modal body */}
-            <div className="flex flex-col gap-4 px-6 py-5 overflow-y-auto">
+            <div className="flex flex-col gap-4 overflow-y-auto" style={{ padding: "24px" }}>
               {isStayEdit && (
                 <div className="rounded-lg px-3 py-2 text-[12px]" style={{ background: "rgba(59,158,149,0.08)", color: "#1f7068", border: "1px solid rgba(59,158,149,0.2)" }}>
                   This entry is derived from the calendar. Only payment details can be edited here.
