@@ -546,7 +546,7 @@ export default function RevenuePage() {
             style={{ background: "#fff", width: 480, maxHeight: "85vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}
           >
             {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #e4e2dc" }}>
+            <div className="flex items-center justify-between" style={{ borderBottom: "1px solid #e4e2dc", paddingLeft: "24px", paddingRight: "24px", paddingTop: "20px", paddingBottom: "20px" }}>
               <h2 className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
                 {showAdd ? "Add Revenue Entry" : isStayEdit ? "Edit Payment Details" : "Edit Entry"}
               </h2>
@@ -572,7 +572,7 @@ export default function RevenuePage() {
                       onChange={e => handleFormChange("guestName", e.target.value)}
                       placeholder="e.g. The Johnson Family"
                       className="rounded-lg px-3 text-[13px]"
-                      style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                      style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                     />
                   </div>
 
@@ -583,7 +583,7 @@ export default function RevenuePage() {
                         type="date" value={form.checkIn}
                         onChange={e => handleFormChange("checkIn", e.target.value)}
                         className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
@@ -592,7 +592,7 @@ export default function RevenuePage() {
                         type="number" min={1} value={form.nights}
                         onChange={e => handleFormChange("nights", parseInt(e.target.value) || 1)}
                         className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                       />
                     </div>
                   </div>
@@ -604,7 +604,7 @@ export default function RevenuePage() {
                         type="number" min={0} value={form.nightlyRate}
                         onChange={e => handleFormChange("nightlyRate", parseFloat(e.target.value) || 0)}
                         className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
@@ -613,7 +613,7 @@ export default function RevenuePage() {
                         type="number" min={0} value={form.totalAmount}
                         onChange={e => handleFormChange("totalAmount", parseFloat(e.target.value) || 0)}
                         className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                       />
                     </div>
                   </div>
@@ -627,7 +627,7 @@ export default function RevenuePage() {
                     value={form.paymentStatus}
                     onChange={e => handleFormChange("paymentStatus", e.target.value as PaymentStatus)}
                     className="rounded-lg px-3 text-[13px]"
-                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                   >
                     {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
                   </select>
@@ -638,7 +638,7 @@ export default function RevenuePage() {
                     value={form.paymentMethod}
                     onChange={e => handleFormChange("paymentMethod", e.target.value as PaymentMethod)}
                     className="rounded-lg px-3 text-[13px]"
-                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                   >
                     {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
                   </select>
@@ -653,13 +653,13 @@ export default function RevenuePage() {
                   rows={2}
                   placeholder="Any additional notes..."
                   className="rounded-lg px-3 py-2 text-[13px] resize-none"
-                  style={{ border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none" }}
+                  style={{ border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
                 />
               </div>
             </div>
 
             {/* Modal footer */}
-            <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: "1px solid #e4e2dc" }}>
+            <div className="flex justify-end gap-2" style={{ borderTop: "1px solid #e4e2dc", paddingRight: "24px", paddingBottom: "20px", paddingTop: "16px" }}>
               <button
                 onClick={closeModals}
                 className="rounded-lg px-4 text-[13px] transition-colors"
