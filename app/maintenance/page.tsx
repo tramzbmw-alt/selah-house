@@ -125,10 +125,13 @@ export default function MaintenancePage() {
                     {f}
                     {count > 0 && (
                       <span
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                         style={{
-                          background: active ? "rgba(255,255,255,0.22)" : "#e0ddd8",
-                          color:      active ? "#fff" : "#6b6960",
+                          marginLeft: "6px",
+                          padding: "2px 6px",
+                          borderRadius: "10px",
+                          backgroundColor: active ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)",
+                          fontSize: 10,
+                          fontWeight: 600,
                         }}
                       >
                         {count}
