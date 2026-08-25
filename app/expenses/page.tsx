@@ -182,6 +182,15 @@ export default function ExpensesPage() {
   const [paidBy,      setPaidBy]      = useState<ExpensePaidBy>("Travis");
   const [datePaid,    setDatePaid]    = useState(localDate());
   const [notes,       setNotes]       = useState("");
+  const [modalIsSplit,      setModalIsSplit]      = useState(false);
+  const [modalSplitTravis,  setModalSplitTravis]  = useState("");
+  const [modalSplitBriana,  setModalSplitBriana]  = useState("");
+
+  const modalExpectedTotal  = parseFloat(amount) || 0;
+  const modalSplitTravAmt   = parseFloat(modalSplitTravis) || 0;
+  const modalSplitBriAmt    = parseFloat(modalSplitBriana) || 0;
+  const modalSplitSum       = modalSplitTravAmt + modalSplitBriAmt;
+  const modalSplitValid     = Math.abs(modalSplitSum - modalExpectedTotal) < 0.01;
 
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => setIsMounted(true), []);
@@ -206,23 +215,35 @@ export default function ExpensesPage() {
     setEditId(null); setCategory(allCategories[0] ?? "Miscellaneous"); setDescription("");
     setAmount(""); setDueDate(localDate()); setRecurrence("One-time");
     setModalStatus("Unpaid"); setPaidBy("Travis"); setDatePaid(localDate());
-    setNotes(""); setShowModal(true);
+    setNotes(""); setModalIsSplit(false); setModalSplitTravis(""); setModalSplitBriana("");
+    setShowModal(true);
   }
   function openEdit(e: Expense) {
     setEditId(e.id); setCategory(e.category); setDescription(e.description);
     setAmount(String(e.amount)); setDueDate(e.dueDate); setRecurrence(e.recurrence);
-    setModalStatus(e.status); setPaidBy(e.paidBy === "Briana" ? "Briana" : "Travis");
+    setModalStatus(e.status);
     setDatePaid(e.datePaid ?? localDate()); setNotes(e.notes ?? "");
+    if (e.splitPayment) {
+      setModalIsSplit(true);
+      setModalSplitTravis(String(e.splitPayment.travis));
+      setModalSplitBriana(String(e.splitPayment.briana));
+      setPaidBy("Travis");
+    } else {
+      setModalIsSplit(false); setModalSplitTravis(""); setModalSplitBriana("");
+      setPaidBy(e.paidBy === "Briana" ? "Briana" : "Travis");
+    }
     setShowModal(true);
   }
   function closeModal() { setShowModal(false); setEditId(null); }
   function handleSave() {
     if (!description.trim() || !amount || !dueDate) return;
+    const isPaid = modalStatus === "Paid";
     const data: Omit<Expense, "id"> = {
       category, description: description.trim(), amount: parseFloat(amount),
       dueDate, status: modalStatus, recurrence,
-      paidBy:   modalStatus === "Paid" ? paidBy   : undefined,
-      datePaid: modalStatus === "Paid" ? datePaid  : undefined,
+      paidBy:       isPaid ? (modalIsSplit ? "Split" : paidBy) : undefined,
+      datePaid:     isPaid ? datePaid : undefined,
+      splitPayment: isPaid && modalIsSplit ? { travis: modalSplitTravAmt, briana: modalSplitBriAmt } : undefined,
       notes: notes.trim() || undefined,
     };
     if (editId) updateExpense(editId, data);
@@ -254,7 +275,8 @@ export default function ExpensesPage() {
     setSplitBriana(half);
   }
 
-  const canSave = description.trim() && amount && parseFloat(amount) > 0 && dueDate;
+  const canSave = !!(description.trim() && amount && parseFloat(amount) > 0 && dueDate
+    && (modalStatus !== "Paid" || !modalIsSplit || (modalSplitValid && modalSplitTravAmt > 0 && modalSplitBriAmt > 0)));
 
   // ── Recurring template modal ──────────────────────────────────────
   const [showTplModal, setShowTplModal] = useState(false);
@@ -980,19 +1002,75 @@ export default function ExpensesPage() {
               </div>
               {modalStatus === "Paid" && (
                 <>
-                  <div>
-                    <label style={LBL}>Paid by</label>
-                    <div className="flex gap-2">
-                      {(["Travis", "Briana"] as const).map(p => {
-                        const col = p === "Travis" ? TRAVIS : BRIANA;
-                        return (
-                          <button key={p} className="flex-1 py-2 rounded-xl text-[13px] font-medium"
-                            style={{ border: "none", cursor: "pointer", background: paidBy === p ? col.bg : "#f4f3f0", color: paidBy === p ? col.text : "#6b6960" }}
-                            onClick={() => setPaidBy(p)}>{p}</button>
-                        );
-                      })}
+                  {/* Split toggle */}
+                  <div className="flex items-center justify-between py-1">
+                    <div>
+                      <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>Split payment</div>
+                      <div className="text-[11px]" style={{ color: "#9e9b93" }}>Divide between Travis and Briana</div>
                     </div>
+                    <button
+                      className="text-[12px] font-semibold px-3 py-1.5 rounded-full"
+                      style={{ background: modalIsSplit ? "#1c1c1a" : "#f0ede8", color: modalIsSplit ? "#fff" : "#9e9b93", border: "none", cursor: "pointer", minWidth: 44, textAlign: "center" }}
+                      onClick={() => { setModalIsSplit(v => !v); setModalSplitTravis(""); setModalSplitBriana(""); }}
+                    >
+                      {modalIsSplit ? "On" : "Off"}
+                    </button>
                   </div>
+
+                  {modalIsSplit ? (
+                    <>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label style={LBL}>Travis</label>
+                          <div style={{ position: "relative" }}>
+                            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9e9b93", fontSize: 13, pointerEvents: "none" }}>$</span>
+                            <input type="number" min={0} step="0.01" value={modalSplitTravis} onChange={e => setModalSplitTravis(e.target.value)} placeholder="0.00" style={{ ...IN, paddingLeft: 26 }} />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <label style={LBL}>Briana</label>
+                          <div style={{ position: "relative" }}>
+                            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9e9b93", fontSize: 13, pointerEvents: "none" }}>$</span>
+                            <input type="number" min={0} step="0.01" value={modalSplitBriana} onChange={e => setModalSplitBriana(e.target.value)} placeholder="0.00" style={{ ...IN, paddingLeft: 26 }} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => {
+                            const half = (modalExpectedTotal / 2).toFixed(2).replace(/\.00$/, "");
+                            setModalSplitTravis(half); setModalSplitBriana(half);
+                          }}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                          style={{ background: "#f0ede8", color: "#6b6960", border: "none", cursor: "pointer" }}
+                        >
+                          Split evenly
+                        </button>
+                        {(modalSplitTravis || modalSplitBriana) && (
+                          <div className="text-[11.5px] font-medium" style={{ color: modalSplitValid ? "#3b9e95" : "#b93228" }}>
+                            {modalSplitValid
+                              ? `${fmtAmt(modalSplitTravAmt)} + ${fmtAmt(modalSplitBriAmt)} ✓`
+                              : `${fmtAmt(modalSplitSum)} / ${fmtAmt(modalExpectedTotal)} total`}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <label style={LBL}>Paid by</label>
+                      <div className="flex gap-2">
+                        {(["Travis", "Briana"] as const).map(p => {
+                          const col = p === "Travis" ? TRAVIS : BRIANA;
+                          return (
+                            <button key={p} className="flex-1 py-2 rounded-xl text-[13px] font-medium"
+                              style={{ border: "none", cursor: "pointer", background: paidBy === p ? col.bg : "#f4f3f0", color: paidBy === p ? col.text : "#6b6960" }}
+                              onClick={() => setPaidBy(p)}>{p}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label style={LBL}>Date paid</label>
                     <input type="date" value={datePaid} onChange={e => setDatePaid(e.target.value)} style={IN} />
