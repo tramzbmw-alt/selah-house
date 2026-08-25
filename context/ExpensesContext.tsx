@@ -20,6 +20,7 @@ export type Expense = {
   recurrence: ExpenseRecurrence;
   notes?: string;
   templateId?: string;
+  vendorId?: string;
 };
 
 export type RecurringTemplate = {

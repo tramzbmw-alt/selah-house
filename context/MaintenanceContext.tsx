@@ -14,6 +14,7 @@ export type MaintenanceTask = {
   dueDate: string;
   recurrence: TaskRecurrence;
   assignee?: TaskAssignee;
+  vendorId?: string;
   cost?: number;
   notes?: string;
   manualDone?: boolean;
@@ -45,7 +46,7 @@ export function nextDueDate(dueDate: string, recurrence: TaskRecurrence): string
 const SEED: MaintenanceTask[] = [
   { id: "m1", title: "HVAC filter replacement", category: "HVAC",         dueDate: "2026-07-28", recurrence: "Quarterly",  assignee: "Travis" },
   { id: "m2", title: "Outdoor shower caulk",    category: "Plumbing",     dueDate: "2026-08-25", recurrence: "One-time",   assignee: "Travis" },
-  { id: "m3", title: "Pest control visit",       category: "Pest Control", dueDate: "2026-08-02", recurrence: "Quarterly",  assignee: "Vendor", manualDone: true, completedDate: "2026-08-02", actualCost: 85 },
+  { id: "m3", title: "Pest control visit",       category: "Pest Control", dueDate: "2026-08-02", recurrence: "Quarterly",  assignee: "Vendor", vendorId: "v2", manualDone: true, completedDate: "2026-08-02", actualCost: 85 },
   { id: "m4", title: "Fire pit inspection",      category: "General",      dueDate: "2026-10-01", recurrence: "Annual",     assignee: "Travis" },
 ];
 

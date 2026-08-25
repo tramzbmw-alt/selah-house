@@ -6,6 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import MaintenanceModal from "@/components/MaintenanceModal";
 import { useMaintenance, deriveStatus, type MaintenanceTask, type TaskCategory, type TaskStatus } from "@/context/MaintenanceContext";
+import { useVendors } from "@/context/VendorsContext";
 import { formatShortDate } from "@/lib/stayUtils";
 
 function catIcon(cat: TaskCategory) {
@@ -36,6 +37,7 @@ function sortTasks(tasks: MaintenanceTask[]) {
 
 export default function MaintenancePage() {
   const { tasks, addTask, updateTask, removeTask, completeTask } = useMaintenance();
+  const { vendors } = useVendors();
 
   const [filter,      setFilter]      = useState<Filter>("All");
   const [showModal,   setShowModal]   = useState(false);
@@ -154,9 +156,11 @@ export default function MaintenancePage() {
                   const { badge, icon } = STATUS_STYLE[status];
                   const Icon = catIcon(task.category);
                   const dueStr = formatShortDate(task.dueDate);
+                  const vendorName = task.vendorId ? vendors.find(v => v.id === task.vendorId)?.name : null;
+                  const assigneeLabel = task.assignee === "Vendor" && vendorName ? vendorName : task.assignee;
                   const meta = task.manualDone
-                    ? `Completed ${task.completedDate ? formatShortDate(task.completedDate) : ""}${task.actualCost != null ? ` · $${task.actualCost}` : ""}`
-                    : `Due ${dueStr} · ${task.recurrence}${task.assignee ? ` · ${task.assignee}` : ""}`;
+                    ? `Completed ${task.completedDate ? formatShortDate(task.completedDate) : ""}${task.actualCost != null ? ` · $${task.actualCost}` : ""}${vendorName ? ` · ${vendorName}` : ""}`
+                    : `Due ${dueStr} · ${task.recurrence}${assigneeLabel ? ` · ${assigneeLabel}` : ""}`;
 
                   return (
                     <div

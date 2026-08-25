@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { IconX, IconWind, IconDroplet, IconBug, IconBolt, IconTool, IconDots, IconCheck } from "@tabler/icons-react";
 import {
   type MaintenanceTask, type TaskCategory, type TaskRecurrence, type TaskAssignee,
   deriveStatus, CATEGORIES, RECURRENCES, ASSIGNEES,
 } from "@/context/MaintenanceContext";
+import { useVendors } from "@/context/VendorsContext";
 
 function localDate(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -44,6 +46,7 @@ type Props = {
 export default function MaintenanceModal({ task, onClose, onSave, onDelete, onComplete }: Props) {
   const isEdit = !!task;
   const status = task ? deriveStatus(task) : null;
+  const { vendors } = useVendors();
 
   const [view,     setView]     = useState<"form" | "complete">("form");
   const [title,    setTitle]    = useState(task?.title    ?? "");
@@ -51,6 +54,7 @@ export default function MaintenanceModal({ task, onClose, onSave, onDelete, onCo
   const [dueDate,  setDueDate]  = useState(task?.dueDate  ?? localDate());
   const [recur,    setRecur]    = useState<TaskRecurrence>(task?.recurrence ?? "One-time");
   const [assignee, setAssignee] = useState<TaskAssignee | "">(task?.assignee ?? "");
+  const [vendorId, setVendorId] = useState<string>(task?.vendorId ?? "");
   const [cost,     setCost]     = useState(task?.cost != null ? String(task.cost) : "");
   const [notes,    setNotes]    = useState(task?.notes ?? "");
 
@@ -65,6 +69,7 @@ export default function MaintenanceModal({ task, onClose, onSave, onDelete, onCo
       dueDate,
       recurrence: recur,
       assignee:   assignee || undefined,
+      vendorId:   assignee === "Vendor" && vendorId ? vendorId : undefined,
       cost:       cost     ? parseFloat(cost)     : undefined,
       notes:      notes.trim() || undefined,
       manualDone:     task?.manualDone,
@@ -235,6 +240,32 @@ export default function MaintenanceModal({ task, onClose, onSave, onDelete, onCo
                 ))}
               </div>
             </div>
+
+            {/* Vendor dropdown — shown when assignee is Vendor */}
+            {assignee === "Vendor" && (
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-[0.08em] mb-1.5" style={{ color: "#9e9b93" }}>Vendor</div>
+                {vendors.length === 0 ? (
+                  <div className="text-[12px]" style={{ color: "#9e9b93" }}>
+                    No vendors yet.{" "}
+                    <Link href="/vendors" style={{ color: "#3b9e95", textDecoration: "underline" }} onClick={onClose}>
+                      Add one
+                    </Link>
+                  </div>
+                ) : (
+                  <select
+                    value={vendorId}
+                    onChange={e => setVendorId(e.target.value)}
+                    style={{ ...IN, appearance: "auto" as any }}
+                  >
+                    <option value="">— Select vendor —</option>
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             {/* Cost + Notes */}
             <div>

@@ -20,6 +20,7 @@ import {
   EXPENSE_RECURRENCES,
   templateDueDate,
 } from "@/context/ExpensesContext";
+import { useVendors } from "@/context/VendorsContext";
 import { MONTHS, MONTHS_SHORT, TRAVIS, BRIANA } from "@/lib/stayUtils";
 
 function localDate(d = new Date()) {
@@ -76,6 +77,7 @@ export default function ExpensesPage() {
     customCategories, addCategory, removeCategory,
     recurringTemplates, addTemplate, updateTemplate, removeTemplate,
   } = useExpenses();
+  const { vendors } = useVendors();
 
   const now = new Date();
   const allCategories = [...DEFAULT_EXPENSE_CATEGORIES, ...customCategories];
@@ -182,6 +184,7 @@ export default function ExpensesPage() {
   const [paidBy,      setPaidBy]      = useState<ExpensePaidBy>("Travis");
   const [datePaid,    setDatePaid]    = useState(localDate());
   const [notes,       setNotes]       = useState("");
+  const [modalVendorId,     setModalVendorId]     = useState("");
   const [modalIsSplit,      setModalIsSplit]      = useState(false);
   const [modalSplitTravis,  setModalSplitTravis]  = useState("");
   const [modalSplitBriana,  setModalSplitBriana]  = useState("");
@@ -215,7 +218,7 @@ export default function ExpensesPage() {
     setEditId(null); setCategory(allCategories[0] ?? "Miscellaneous"); setDescription("");
     setAmount(""); setDueDate(localDate()); setRecurrence("One-time");
     setModalStatus("Unpaid"); setPaidBy("Travis"); setDatePaid(localDate());
-    setNotes(""); setModalIsSplit(false); setModalSplitTravis(""); setModalSplitBriana("");
+    setNotes(""); setModalVendorId(""); setModalIsSplit(false); setModalSplitTravis(""); setModalSplitBriana("");
     setShowModal(true);
   }
   function openEdit(e: Expense) {
@@ -223,6 +226,7 @@ export default function ExpensesPage() {
     setAmount(String(e.amount)); setDueDate(e.dueDate); setRecurrence(e.recurrence);
     setModalStatus(e.status);
     setDatePaid(e.datePaid ?? localDate()); setNotes(e.notes ?? "");
+    setModalVendorId(e.vendorId ?? "");
     if (e.splitPayment) {
       setModalIsSplit(true);
       setModalSplitTravis(String(e.splitPayment.travis));
@@ -245,6 +249,7 @@ export default function ExpensesPage() {
       datePaid:     isPaid ? datePaid : undefined,
       splitPayment: isPaid && modalIsSplit ? { travis: modalSplitTravAmt, briana: modalSplitBriAmt } : undefined,
       notes: notes.trim() || undefined,
+      vendorId: modalVendorId || undefined,
     };
     if (editId) updateExpense(editId, data);
     else        addExpense(data);
@@ -733,6 +738,7 @@ export default function ExpensesPage() {
                             <div className="text-[11.5px] mt-0.5" style={{ color: "#9e9b93" }}>
                               {exp.status === "Paid" ? <>Paid {exp.datePaid ? fmtDate(exp.datePaid) : "—"}</> : <>Due {fmtDate(exp.dueDate)}</>}
                               {exp.recurrence !== "One-time" && <span> · {exp.recurrence}</span>}
+                              {exp.vendorId && (() => { const v = vendors.find(x => x.id === exp.vendorId); return v ? <span> · {v.name}</span> : null; })()}
                               {exp.notes && <span> · {exp.notes}</span>}
                             </div>
                           </div>
@@ -1076,6 +1082,17 @@ export default function ExpensesPage() {
                     <input type="date" value={datePaid} onChange={e => setDatePaid(e.target.value)} style={IN} />
                   </div>
                 </>
+              )}
+              {vendors.length > 0 && (
+                <div>
+                  <label style={LBL}>Vendor <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+                  <select value={modalVendorId} onChange={e => setModalVendorId(e.target.value)} style={{ ...IN, appearance: "auto" as never }}>
+                    <option value="">— None —</option>
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                    ))}
+                  </select>
+                </div>
               )}
               <div>
                 <label style={LBL}>Notes <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
