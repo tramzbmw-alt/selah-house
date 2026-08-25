@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
-export type ExpenseCategory   = string; // supports default + custom categories
-export type ExpensePaidBy     = "Travis" | "Briana";
+export type ExpenseCategory   = string;
+export type ExpensePaidBy     = "Travis" | "Briana" | "Split";
 export type ExpenseStatus     = "Unpaid" | "Paid";
 export type ExpenseRecurrence = "One-time" | "Monthly" | "Quarterly" | "Annual";
 
@@ -16,9 +16,10 @@ export type Expense = {
   status: ExpenseStatus;
   paidBy?: ExpensePaidBy;
   datePaid?: string;
+  splitPayment?: { travis: number; briana: number }; // only when paidBy === "Split"
   recurrence: ExpenseRecurrence;
   notes?: string;
-  templateId?: string;      // links to a RecurringTemplate
+  templateId?: string;
 };
 
 export type RecurringTemplate = {
@@ -26,15 +27,14 @@ export type RecurringTemplate = {
   name: string;
   category: string;
   defaultAmount: number;
-  dueDayOfMonth: number;   // 1–31
-  paidBy: ExpensePaidBy;
+  dueDayOfMonth: number;             // 1–31
+  generateMode: "automatic" | "manual";
   active: boolean;
 };
 
 export const DEFAULT_EXPENSE_CATEGORIES: string[] = [
   "Mortgage", "Electric", "Water", "Insurance", "Maintenance", "Miscellaneous", "Other",
 ];
-// Backward-compat alias used by other files
 export const EXPENSE_CATEGORIES = DEFAULT_EXPENSE_CATEGORIES;
 
 export const EXPENSE_RECURRENCES: ExpenseRecurrence[] = [
@@ -56,18 +56,18 @@ export function templateDueDate(t: Pick<RecurringTemplate, "dueDayOfMonth">, yea
 }
 
 const SEED_TEMPLATES: RecurringTemplate[] = [
-  { id: "rt1", name: "Mortgage",             category: "Mortgage",      defaultAmount: 2400, dueDayOfMonth: 1,  paidBy: "Travis", active: true },
-  { id: "rt2", name: "Electric",             category: "Electric",      defaultAmount: 185,  dueDayOfMonth: 5,  paidBy: "Briana", active: true },
-  { id: "rt3", name: "Water",                category: "Water",         defaultAmount: 65,   dueDayOfMonth: 7,  paidBy: "Travis", active: true },
-  { id: "rt4", name: "Homeowners Insurance", category: "Insurance",     defaultAmount: 220,  dueDayOfMonth: 25, paidBy: "Travis", active: true },
-  { id: "rt5", name: "Pool Service",         category: "Miscellaneous", defaultAmount: 95,   dueDayOfMonth: 28, paidBy: "Travis", active: true },
+  { id: "rt1", name: "Mortgage",             category: "Mortgage",      defaultAmount: 2400, dueDayOfMonth: 1,  generateMode: "automatic", active: true },
+  { id: "rt2", name: "Electric",             category: "Electric",      defaultAmount: 185,  dueDayOfMonth: 5,  generateMode: "automatic", active: true },
+  { id: "rt3", name: "Water",                category: "Water",         defaultAmount: 65,   dueDayOfMonth: 7,  generateMode: "automatic", active: true },
+  { id: "rt4", name: "Homeowners Insurance", category: "Insurance",     defaultAmount: 220,  dueDayOfMonth: 25, generateMode: "automatic", active: true },
+  { id: "rt5", name: "Pool Service",         category: "Miscellaneous", defaultAmount: 95,   dueDayOfMonth: 28, generateMode: "automatic", active: true },
 ];
 
 const SEED: Expense[] = [
   { id: "ex1", category: "Mortgage",      description: "Mortgage",             amount: 2400, dueDate: "2026-08-01", status: "Paid",   paidBy: "Travis", datePaid: "2026-08-01", recurrence: "Monthly",  templateId: "rt1" },
   { id: "ex2", category: "Electric",      description: "Electric",             amount: 185,  dueDate: "2026-08-05", status: "Paid",   paidBy: "Briana", datePaid: "2026-08-05", recurrence: "Monthly",  templateId: "rt2" },
   { id: "ex3", category: "Water",         description: "Water",                amount: 65,   dueDate: "2026-08-07", status: "Paid",   paidBy: "Travis", datePaid: "2026-08-07", recurrence: "Monthly",  templateId: "rt3" },
-  { id: "ex4", category: "Miscellaneous", description: "Cleaning supplies",    amount: 540,  dueDate: "2026-08-15", status: "Paid",   paidBy: "Briana", datePaid: "2026-08-15", recurrence: "One-time" },
+  { id: "ex4", category: "Miscellaneous", description: "Cleaning supplies",    amount: 540,  dueDate: "2026-08-15", status: "Paid",   paidBy: "Split",  datePaid: "2026-08-15", splitPayment: { travis: 270, briana: 270 }, recurrence: "One-time" },
   { id: "ex5", category: "Insurance",     description: "Homeowners Insurance", amount: 220,  dueDate: "2026-08-25", status: "Unpaid",                                          recurrence: "Monthly",  templateId: "rt4" },
   { id: "ex6", category: "Miscellaneous", description: "Pool Service",         amount: 95,   dueDate: "2026-08-28", status: "Unpaid",                                          recurrence: "Monthly",  templateId: "rt5" },
 ];
@@ -80,7 +80,7 @@ type ExpensesCtx = {
   addExpense:         (data: Omit<Expense, "id">) => void;
   updateExpense:      (id: string, data: Partial<Omit<Expense, "id">>) => void;
   removeExpense:      (id: string) => void;
-  markPaid:           (id: string, paidBy: ExpensePaidBy, datePaid: string) => void;
+  markPaid:           (id: string, paidBy: ExpensePaidBy, datePaid: string, splitPayment?: { travis: number; briana: number }) => void;
 
   customCategories:   string[];
   addCategory:        (name: string) => void;
@@ -99,7 +99,7 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
   const [customCategories,   setCustomCategories]   = useState<string[]>([]);
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(SEED_TEMPLATES);
 
-  // On mount: auto-generate current-month entries for active templates that don't yet exist
+  // On mount: auto-generate current-month entries for active "automatic" templates
   useEffect(() => {
     const now = new Date();
     const year  = now.getFullYear();
@@ -108,7 +108,7 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
     setExpenses(prev => {
       const toAdd: Expense[] = [];
       for (const t of SEED_TEMPLATES) {
-        if (!t.active) continue;
+        if (!t.active || t.generateMode !== "automatic") continue;
         const exists = prev.some(e => e.templateId === t.id && e.dueDate.startsWith(monthPrefix));
         if (!exists) {
           toAdd.push({
@@ -139,13 +139,20 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
     setExpenses(e => e.filter(ex => ex.id !== id));
   }
 
-  function markPaid(id: string, paidBy: ExpensePaidBy, datePaid: string) {
+  function markPaid(
+    id: string,
+    paidBy: ExpensePaidBy,
+    datePaid: string,
+    splitPayment?: { travis: number; briana: number },
+  ) {
     setExpenses(prev => {
       const exp = prev.find(e => e.id === id);
       if (!exp) return prev;
 
       const updated = prev.map(e =>
-        e.id === id ? { ...e, status: "Paid" as ExpenseStatus, paidBy, datePaid } : e
+        e.id === id
+          ? { ...e, status: "Paid" as ExpenseStatus, paidBy, datePaid, splitPayment: splitPayment ?? undefined }
+          : e
       );
 
       if (exp.recurrence !== "One-time") {
@@ -155,7 +162,7 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
           && e.dueDate === nextDue
         );
         if (!alreadyExists) {
-          const { paidBy: _pb, datePaid: _dp, ...rest } = exp;
+          const { paidBy: _pb, datePaid: _dp, splitPayment: _sp, ...rest } = exp;
           updated.push({ ...rest, id: `ex${_nextExpId++}`, dueDate: nextDue, status: "Unpaid" });
         }
       }
@@ -182,7 +189,8 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
     const newTpl: RecurringTemplate = { ...data, id };
     setRecurringTemplates(prev => [...prev, newTpl]);
 
-    if (data.active) {
+    // Auto-generate current month only for automatic mode
+    if (data.active && data.generateMode === "automatic") {
       const now = new Date();
       const year  = now.getFullYear();
       const month = now.getMonth() + 1;

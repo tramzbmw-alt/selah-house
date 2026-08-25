@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import {
   IconReceipt2, IconPlus, IconPencil, IconTrash, IconX,
   IconCheck, IconChevronLeft, IconChevronRight, IconCalendar,
-  IconTag, IconRepeat,
+  IconTag, IconRepeat, IconCalendarPlus,
 } from "@tabler/icons-react";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import Sidebar from "@/components/Sidebar";
@@ -67,8 +67,8 @@ const LBL: React.CSSProperties = {
   marginBottom: 6, color: "#9e9b93",
 };
 
-type TabFilter  = "All" | "Unpaid" | "Paid";
-type PageView   = "expenses" | "recurring";
+type TabFilter = "All" | "Unpaid" | "Paid";
+type PageView  = "expenses" | "recurring";
 
 export default function ExpensesPage() {
   const {
@@ -120,6 +120,22 @@ export default function ExpensesPage() {
   const totalPaid   = periodExpenses.filter(e => e.status === "Paid").reduce((s, e) => s + e.amount, 0);
   const totalUnpaid = totalBilled - totalPaid;
 
+  const travPaid = periodExpenses
+    .filter(e => e.status === "Paid")
+    .reduce((s, e) => {
+      if (e.paidBy === "Travis") return s + e.amount;
+      if (e.paidBy === "Split" && e.splitPayment) return s + e.splitPayment.travis;
+      return s;
+    }, 0);
+
+  const brianaPaid = periodExpenses
+    .filter(e => e.status === "Paid")
+    .reduce((s, e) => {
+      if (e.paidBy === "Briana") return s + e.amount;
+      if (e.paidBy === "Split" && e.splitPayment) return s + e.splitPayment.briana;
+      return s;
+    }, 0);
+
   const breakdown = allCategories
     .map(cat => ({ cat, total: periodExpenses.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0) }))
     .filter(x => x.total > 0)
@@ -170,10 +186,21 @@ export default function ExpensesPage() {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => setIsMounted(true), []);
 
-  // ── Mark-as-Paid mini-modal ──────────────────────────────────────
+  // ── Mark-as-Paid modal ───────────────────────────────────────────
   const [markingId,    setMarkingId]    = useState<string | null>(null);
-  const [markPaidBy,   setMarkPaidBy]   = useState<ExpensePaidBy>("Travis");
+  const [markPaidBy,   setMarkPaidBy]   = useState<"Travis" | "Briana">("Travis");
   const [markPaidDate, setMarkPaidDate] = useState(localDate());
+  const [isSplit,      setIsSplit]      = useState(false);
+  const [splitTravis,  setSplitTravis]  = useState("");
+  const [splitBriana,  setSplitBriana]  = useState("");
+
+  const markingExpense = markingId ? expenses.find(e => e.id === markingId) : null;
+  const expectedTotal  = markingExpense?.amount ?? 0;
+  const splitTravisAmt = parseFloat(splitTravis) || 0;
+  const splitBrianaAmt = parseFloat(splitBriana) || 0;
+  const splitSum       = splitTravisAmt + splitBrianaAmt;
+  const splitValid     = Math.abs(splitSum - expectedTotal) < 0.01;
+  const canConfirmPaid = isSplit ? splitValid && splitTravisAmt > 0 && splitBrianaAmt > 0 : true;
 
   function openAdd() {
     setEditId(null); setCategory(allCategories[0] ?? "Miscellaneous"); setDescription("");
@@ -184,7 +211,7 @@ export default function ExpensesPage() {
   function openEdit(e: Expense) {
     setEditId(e.id); setCategory(e.category); setDescription(e.description);
     setAmount(String(e.amount)); setDueDate(e.dueDate); setRecurrence(e.recurrence);
-    setModalStatus(e.status); setPaidBy(e.paidBy ?? "Travis");
+    setModalStatus(e.status); setPaidBy(e.paidBy === "Briana" ? "Briana" : "Travis");
     setDatePaid(e.datePaid ?? localDate()); setNotes(e.notes ?? "");
     setShowModal(true);
   }
@@ -203,35 +230,53 @@ export default function ExpensesPage() {
     closeModal();
   }
   function handleDelete() { if (editId) removeExpense(editId); closeModal(); }
+
   function openMarkPaid(exp: Expense) {
-    setMarkingId(exp.id); setMarkPaidBy("Travis"); setMarkPaidDate(localDate());
+    setMarkingId(exp.id);
+    setMarkPaidBy("Travis");
+    setMarkPaidDate(localDate());
+    setIsSplit(false);
+    setSplitTravis("");
+    setSplitBriana("");
   }
   function confirmMarkPaid() {
-    if (markingId) { markPaid(markingId, markPaidBy, markPaidDate); setMarkingId(null); }
+    if (!markingId) return;
+    if (isSplit) {
+      markPaid(markingId, "Split", markPaidDate, { travis: splitTravisAmt, briana: splitBrianaAmt });
+    } else {
+      markPaid(markingId, markPaidBy, markPaidDate);
+    }
+    setMarkingId(null);
   }
+  function splitEvenly() {
+    const half = (expectedTotal / 2).toFixed(2).replace(/\.00$/, "");
+    setSplitTravis(half);
+    setSplitBriana(half);
+  }
+
   const canSave = description.trim() && amount && parseFloat(amount) > 0 && dueDate;
 
   // ── Recurring template modal ──────────────────────────────────────
-  const [showTplModal,   setShowTplModal]   = useState(false);
-  const [editTplId,      setEditTplId]      = useState<string | null>(null);
-  const [tplName,        setTplName]        = useState("");
-  const [tplCategory,    setTplCategory]    = useState(allCategories[0] ?? "Miscellaneous");
-  const [tplAmount,      setTplAmount]      = useState("");
-  const [tplDueDay,      setTplDueDay]      = useState("1");
-  const [tplPaidBy,      setTplPaidBy]      = useState<ExpensePaidBy>("Travis");
-  const [tplActive,      setTplActive]      = useState(true);
+  const [showTplModal, setShowTplModal] = useState(false);
+  const [editTplId,    setEditTplId]    = useState<string | null>(null);
+  const [tplName,      setTplName]      = useState("");
+  const [tplCategory,  setTplCategory]  = useState(allCategories[0] ?? "Miscellaneous");
+  const [tplAmount,    setTplAmount]    = useState("");
+  const [tplDueDay,    setTplDueDay]    = useState("1");
+  const [tplGenMode,   setTplGenMode]   = useState<"automatic" | "manual">("automatic");
+  const [tplActive,    setTplActive]    = useState(true);
 
   function openAddTemplate() {
     setEditTplId(null);
     setTplName(""); setTplCategory(allCategories[0] ?? "Miscellaneous");
-    setTplAmount(""); setTplDueDay("1"); setTplPaidBy("Travis"); setTplActive(true);
+    setTplAmount(""); setTplDueDay("1"); setTplGenMode("automatic"); setTplActive(true);
     setShowTplModal(true);
   }
   function openEditTemplate(t: RecurringTemplate) {
     setEditTplId(t.id);
     setTplName(t.name); setTplCategory(t.category);
     setTplAmount(String(t.defaultAmount)); setTplDueDay(String(t.dueDayOfMonth));
-    setTplPaidBy(t.paidBy); setTplActive(t.active);
+    setTplGenMode(t.generateMode); setTplActive(t.active);
     setShowTplModal(true);
   }
   function closeTplModal() { setShowTplModal(false); setEditTplId(null); }
@@ -246,15 +291,15 @@ export default function ExpensesPage() {
       category: tplCategory,
       defaultAmount: amt,
       dueDayOfMonth: day,
-      paidBy: tplPaidBy,
+      generateMode: tplGenMode,
       active: tplActive,
     };
 
     if (editTplId) {
       const prev = recurringTemplates.find(t => t.id === editTplId);
       updateTemplate(editTplId, data);
-      // Auto-generate for current month if template is being activated
-      if (tplActive && prev && !prev.active) {
+      // Auto-gen current month if activating an automatic template
+      if (tplActive && tplGenMode === "automatic" && prev && !prev.active) {
         autoGenForTemplate({ ...data, id: editTplId });
       }
     } else {
@@ -271,10 +316,10 @@ export default function ExpensesPage() {
   function handleToggleTemplate(t: RecurringTemplate) {
     const newActive = !t.active;
     updateTemplate(t.id, { active: newActive });
-    if (newActive) autoGenForTemplate(t);
+    if (newActive && t.generateMode === "automatic") autoGenForTemplate(t);
   }
 
-  function autoGenForTemplate(t: RecurringTemplate & { id: string }) {
+  function autoGenForTemplate(t: RecurringTemplate) {
     const n = new Date();
     const year  = n.getFullYear();
     const month = n.getMonth() + 1;
@@ -295,15 +340,75 @@ export default function ExpensesPage() {
 
   const canSaveTpl = tplName.trim() && tplAmount && parseFloat(tplAmount) > 0;
 
+  // ── Push to month modal ───────────────────────────────────────────
+  const [showPushModal,  setShowPushModal]  = useState(false);
+  const [pushTemplate,   setPushTemplate]   = useState<RecurringTemplate | null>(null);
+  const [pushYear,       setPushYear]       = useState(now.getFullYear());
+  const [pushMonth,      setPushMonth]      = useState(now.getMonth() + 1);
+
+  const pushMonthPrefix = pushTemplate
+    ? `${pushYear}-${String(pushMonth).padStart(2, "0")}`
+    : "";
+  const pushAlreadyExists = pushTemplate
+    ? expenses.some(e => e.templateId === pushTemplate.id && e.dueDate.startsWith(pushMonthPrefix))
+    : false;
+
+  function openPushModal(t: RecurringTemplate) {
+    setPushTemplate(t);
+    setPushYear(now.getFullYear());
+    setPushMonth(now.getMonth() + 1);
+    setShowPushModal(true);
+  }
+
+  function confirmPushToMonth() {
+    if (!pushTemplate || pushAlreadyExists) return;
+    addExpense({
+      category:    pushTemplate.category,
+      description: pushTemplate.name,
+      amount:      pushTemplate.defaultAmount,
+      dueDate:     templateDueDate(pushTemplate, pushYear, pushMonth),
+      status:      "Unpaid",
+      recurrence:  "Monthly",
+      templateId:  pushTemplate.id,
+    });
+    setShowPushModal(false);
+  }
+
+  const yearOptions = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 1 + i);
+
   // ── Manage categories modal ───────────────────────────────────────
-  const [showCatModal,  setShowCatModal]  = useState(false);
-  const [newCatInput,   setNewCatInput]   = useState("");
+  const [showCatModal, setShowCatModal] = useState(false);
+  const [newCatInput,  setNewCatInput]  = useState("");
 
   function handleAddCategory() {
     const trimmed = newCatInput.trim();
     if (!trimmed) return;
     addCategory(trimmed);
     setNewCatInput("");
+  }
+
+  // ── Paid-by chip helper ───────────────────────────────────────────
+  function PaidByChip({ exp }: { exp: Expense }) {
+    if (!exp.paidBy) return null;
+    if (exp.splitPayment) {
+      return (
+        <span
+          className="text-[10.5px] font-medium px-2.5 py-1 rounded-full flex-shrink-0"
+          style={{ background: "#f0ede8", color: "#6b6960", whiteSpace: "nowrap" }}
+        >
+          Travis {fmtAmt(exp.splitPayment.travis)} · Briana {fmtAmt(exp.splitPayment.briana)}
+        </span>
+      );
+    }
+    const col = exp.paidBy === "Travis" ? TRAVIS : BRIANA;
+    return (
+      <span
+        className="text-[10.5px] font-medium px-2.5 py-1 rounded-full flex-shrink-0"
+        style={{ background: col.bg, color: col.text }}
+      >
+        {exp.paidBy}
+      </span>
+    );
   }
 
   return (
@@ -350,8 +455,8 @@ export default function ExpensesPage() {
             {/* View tabs */}
             <div className="flex gap-1 mb-5 p-1 rounded-xl" style={{ background: "#f4f3f0" }}>
               {([
-                { key: "expenses",  label: "Expenses",      icon: <IconReceipt2 size={12} strokeWidth={2} /> },
-                { key: "recurring", label: "Recurring Bills", icon: <IconRepeat  size={12} strokeWidth={2} /> },
+                { key: "expenses",  label: "Expenses",        icon: <IconReceipt2 size={12} strokeWidth={2} /> },
+                { key: "recurring", label: "Recurring Bills",  icon: <IconRepeat   size={12} strokeWidth={2} /> },
               ] as const).map(({ key, label, icon }) => (
                 <button
                   key={key}
@@ -418,17 +523,9 @@ export default function ExpensesPage() {
                   ) : (
                     <>
                       <div className="flex items-center gap-2 flex-1 flex-wrap">
-                        <input
-                          type="date" value={rangeStart}
-                          onChange={e => setRangeStart(e.target.value)}
-                          style={{ ...IN, width: "auto", flex: 1, minWidth: 130 }}
-                        />
+                        <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} style={{ ...IN, width: "auto", flex: 1, minWidth: 130 }} />
                         <span className="text-[12px]" style={{ color: "#9e9b93" }}>to</span>
-                        <input
-                          type="date" value={rangeEnd}
-                          onChange={e => setRangeEnd(e.target.value)}
-                          style={{ ...IN, width: "auto", flex: 1, minWidth: 130 }}
-                        />
+                        <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} style={{ ...IN, width: "auto", flex: 1, minWidth: 130 }} />
                       </div>
                       <button
                         onClick={() => setFilterMode("month")}
@@ -442,7 +539,7 @@ export default function ExpensesPage() {
                 </div>
 
                 {/* Summary cards */}
-                <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="grid grid-cols-3 gap-3 mb-3">
                   {[
                     { label: "Total billed", value: fmtAmt(totalBilled), dot: "#9e9b93" },
                     { label: "Total paid",   value: fmtAmt(totalPaid),   dot: "#3b9e95" },
@@ -456,6 +553,21 @@ export default function ExpensesPage() {
                   ))}
                 </div>
 
+                {/* Travis / Briana breakdown */}
+                {totalPaid > 0 && (
+                  <div className="grid grid-cols-2 gap-3 mb-5">
+                    {[
+                      { label: "Travis paid",  value: fmtAmt(travPaid),   col: TRAVIS },
+                      { label: "Briana paid",  value: fmtAmt(brianaPaid), col: BRIANA },
+                    ].map(({ label, value, col }) => (
+                      <div key={label} className="rounded-xl" style={{ padding: "11px 14px", background: col.bg, border: col.border }}>
+                        <div className="text-[10px] font-medium uppercase tracking-[0.08em] mb-1" style={{ color: col.text, opacity: 0.75 }}>{label}</div>
+                        <div className="text-[17px] font-semibold leading-none" style={{ color: col.text }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Filter tabs */}
                 <div className="flex gap-1.5 mb-5">
                   {(["All", "Unpaid", "Paid"] as TabFilter[]).map(f => {
@@ -465,20 +577,12 @@ export default function ExpensesPage() {
                       <button
                         key={f}
                         className="flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-medium"
-                        style={{
-                          border: "none", cursor: "pointer",
-                          background: active ? "#1c1c1a" : "#f0ede8",
-                          color:      active ? "#fff"    : "#6b6960",
-                        }}
+                        style={{ border: "none", cursor: "pointer", background: active ? "#1c1c1a" : "#f0ede8", color: active ? "#fff" : "#6b6960" }}
                         onClick={() => setTabFilter(f)}
                       >
                         {f}
                         {count > 0 && (
-                          <span style={{
-                            marginLeft: 2, padding: "2px 6px", borderRadius: 10,
-                            backgroundColor: active ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)",
-                            fontSize: 10, fontWeight: 600,
-                          }}>
+                          <span style={{ marginLeft: 2, padding: "2px 6px", borderRadius: 10, backgroundColor: active ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)", fontSize: 10, fontWeight: 600 }}>
                             {count}
                           </span>
                         )}
@@ -495,11 +599,7 @@ export default function ExpensesPage() {
                     <div className="flex gap-6 items-center">
                       <div style={{ flexShrink: 0 }}>
                         <PieChart width={180} height={180}>
-                          <Pie
-                            data={paidPieData} cx={90} cy={90}
-                            innerRadius={52} outerRadius={82}
-                            paddingAngle={2} dataKey="value" strokeWidth={0}
-                          >
+                          <Pie data={paidPieData} cx={90} cy={90} innerRadius={52} outerRadius={82} paddingAngle={2} dataKey="value" strokeWidth={0}>
                             {paidPieData.map((entry, i) => (
                               <Cell key={i} fill={getCatStyle(entry.cat).bar} />
                             ))}
@@ -590,8 +690,7 @@ export default function ExpensesPage() {
                 ) : (
                   <div className="flex flex-col">
                     {displayExpenses.map((exp, idx) => {
-                      const c  = getCatStyle(exp.category);
-                      const pb = exp.paidBy === "Travis" ? TRAVIS : BRIANA;
+                      const c = getCatStyle(exp.category);
                       const isLast = idx === displayExpenses.length - 1;
                       return (
                         <div
@@ -615,14 +714,7 @@ export default function ExpensesPage() {
                               {exp.notes && <span> · {exp.notes}</span>}
                             </div>
                           </div>
-                          {exp.status === "Paid" && exp.paidBy && (
-                            <span
-                              className="text-[10.5px] font-medium px-2.5 py-1 rounded-full flex-shrink-0"
-                              style={{ background: pb.bg, color: pb.text }}
-                            >
-                              {exp.paidBy}
-                            </span>
-                          )}
+                          {exp.status === "Paid" && <PaidByChip exp={exp} />}
                           <div className="text-[13.5px] font-semibold flex-shrink-0" style={{ color: "#1c1c1a", minWidth: 60, textAlign: "right" }}>
                             {fmtAmt(exp.amount)}
                           </div>
@@ -672,7 +764,7 @@ export default function ExpensesPage() {
             {pageView === "recurring" && (
               <>
                 <div className="text-[11.5px] mb-5" style={{ color: "#9e9b93" }}>
-                  Active templates automatically create an unpaid expense entry at the start of each month.
+                  Automatic templates generate on the 1st of each month. Manual templates are pushed on demand.
                 </div>
 
                 {recurringTemplates.length === 0 ? (
@@ -684,7 +776,6 @@ export default function ExpensesPage() {
                   <div className="flex flex-col">
                     {recurringTemplates.map((t, idx) => {
                       const c = getCatStyle(t.category);
-                      const pb = t.paidBy === "Travis" ? TRAVIS : BRIANA;
                       const isLast = idx === recurringTemplates.length - 1;
                       return (
                         <div
@@ -711,7 +802,7 @@ export default function ExpensesPage() {
                           <div className="flex-1 min-w-0">
                             <div className="text-[13px] font-medium truncate" style={{ color: "#1c1c1a" }}>{t.name}</div>
                             <div className="text-[11px] mt-0.5" style={{ color: "#9e9b93" }}>
-                              Due {ordinal(t.dueDayOfMonth)} of each month
+                              Due {ordinal(t.dueDayOfMonth)} · {t.generateMode === "automatic" ? "Auto" : "Manual"}
                             </div>
                           </div>
 
@@ -728,13 +819,19 @@ export default function ExpensesPage() {
                             {fmtAmt(t.defaultAmount)}
                           </div>
 
-                          {/* Paid-by chip */}
-                          <span
-                            className="text-[10.5px] font-medium px-2.5 py-1 rounded-full flex-shrink-0"
-                            style={{ background: pb.bg, color: pb.text }}
-                          >
-                            {t.paidBy}
-                          </span>
+                          {/* Push to month — manual templates only */}
+                          {t.generateMode === "manual" && t.active && (
+                            <button
+                              className="flex items-center gap-1 text-[11.5px] font-medium px-3 py-1.5 rounded-full flex-shrink-0"
+                              style={{ background: "rgba(59,158,149,0.1)", color: "#3b9e95", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "rgba(59,158,149,0.2)")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "rgba(59,158,149,0.1)")}
+                              onClick={() => openPushModal(t)}
+                            >
+                              <IconCalendarPlus size={11} strokeWidth={2.5} />
+                              Push to month
+                            </button>
+                          )}
 
                           {/* Edit / Delete */}
                           <div className="flex gap-1 flex-shrink-0">
@@ -773,22 +870,12 @@ export default function ExpensesPage() {
       {/* ── Category history drawer ────────────────────────────────── */}
       {historyCategory && (
         <>
-          <div
-            className="fixed inset-0"
-            style={{ background: "rgba(0,0,0,0.18)", zIndex: 40 }}
-            onClick={() => setHistoryCategory(null)}
-          />
-          <div
-            className="fixed top-0 right-0 h-full bg-white flex flex-col"
-            style={{ width: 360, zIndex: 41, borderLeft: "1px solid #e4e2dc", boxShadow: "-4px 0 24px rgba(0,0,0,0.1)" }}
-          >
+          <div className="fixed inset-0" style={{ background: "rgba(0,0,0,0.18)", zIndex: 40 }} onClick={() => setHistoryCategory(null)} />
+          <div className="fixed top-0 right-0 h-full bg-white flex flex-col" style={{ width: 360, zIndex: 41, borderLeft: "1px solid #e4e2dc", boxShadow: "-4px 0 24px rgba(0,0,0,0.1)" }}>
             <div className="flex items-start justify-between flex-shrink-0" style={{ padding: "20px 20px 16px" }}>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className="text-[10.5px] font-medium px-2.5 py-1 rounded-full"
-                    style={{ background: getCatStyle(historyCategory).bg, color: getCatStyle(historyCategory).text }}
-                  >
+                  <span className="text-[10.5px] font-medium px-2.5 py-1 rounded-full" style={{ background: getCatStyle(historyCategory).bg, color: getCatStyle(historyCategory).text }}>
                     {historyCategory}
                   </span>
                 </div>
@@ -797,29 +884,19 @@ export default function ExpensesPage() {
                   {categoryHistory.length} {categoryHistory.length !== 1 ? "entries" : "entry"} · all time
                 </div>
               </div>
-              <button
-                onClick={() => setHistoryCategory(null)}
-                className="flex items-center justify-center rounded-full flex-shrink-0"
-                style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960", marginTop: 2 }}
-              >
+              <button onClick={() => setHistoryCategory(null)} className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960", marginTop: 2 }}>
                 <IconX size={14} strokeWidth={2} />
               </button>
             </div>
             <div style={{ height: 1, background: "#f0ede8" }} />
             <div className="flex-1 overflow-y-auto" style={{ padding: "8px 0" }}>
               {categoryHistory.length === 0 ? (
-                <div className="text-center py-10 text-[13px]" style={{ color: "#9e9b93" }}>
-                  No {historyCategory} expenses yet.
-                </div>
+                <div className="text-center py-10 text-[13px]" style={{ color: "#9e9b93" }}>No {historyCategory} expenses yet.</div>
               ) : (
                 categoryHistory.map((exp, idx) => {
-                  const pb = exp.paidBy === "Travis" ? TRAVIS : BRIANA;
                   const isLast = idx === categoryHistory.length - 1;
                   return (
-                    <div
-                      key={exp.id}
-                      style={{ padding: "12px 20px", borderBottom: isLast ? "none" : "1px solid #f0ede8" }}
-                    >
+                    <div key={exp.id} style={{ padding: "12px 20px", borderBottom: isLast ? "none" : "1px solid #f0ede8" }}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="text-[12.5px] font-medium" style={{ color: "#1c1c1a" }}>{exp.description}</div>
@@ -833,10 +910,8 @@ export default function ExpensesPage() {
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="text-[13px] font-semibold" style={{ color: "#1c1c1a" }}>{fmtAmt(exp.amount)}</div>
-                          {exp.status === "Paid" && exp.paidBy ? (
-                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: pb.bg, color: pb.text }}>
-                              {exp.paidBy}
-                            </span>
+                          {exp.status === "Paid" ? (
+                            <PaidByChip exp={exp} />
                           ) : (
                             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "rgba(201,168,76,0.15)", color: "#7a5e10" }}>
                               Unpaid
@@ -855,28 +930,14 @@ export default function ExpensesPage() {
 
       {/* ── Add/Edit expense modal ─────────────────────────────────── */}
       {showModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
-          onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
-        >
-          <div
-            className="bg-white rounded-2xl"
-            style={{ width: 420, maxHeight: "92vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}
-          >
+        <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+          <div className="bg-white rounded-2xl" style={{ width: 420, maxHeight: "92vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
             <div className="flex items-center justify-between mb-5">
-              <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
-                {editId ? "Edit expense" : "New expense"}
-              </div>
-              <button
-                onClick={closeModal}
-                className="flex items-center justify-center rounded-full"
-                style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}
-              >
+              <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>{editId ? "Edit expense" : "New expense"}</div>
+              <button onClick={closeModal} className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}>
                 <IconX size={14} strokeWidth={2} />
               </button>
             </div>
-
             <div className="flex flex-col gap-3">
               <div>
                 <label style={LBL}>Category</label>
@@ -886,11 +947,7 @@ export default function ExpensesPage() {
               </div>
               <div>
                 <label style={LBL}>Description</label>
-                <input
-                  type="text" value={description} onChange={e => setDescription(e.target.value)}
-                  placeholder="e.g. Duke Energy bill" autoFocus
-                  onKeyDown={e => e.key === "Enter" && handleSave()} style={IN}
-                />
+                <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Duke Energy bill" autoFocus onKeyDown={e => e.key === "Enter" && handleSave()} style={IN} />
               </div>
               <div className="flex gap-2">
                 <div className="flex-1">
@@ -915,18 +972,9 @@ export default function ExpensesPage() {
                 <label style={LBL}>Status</label>
                 <div className="flex gap-2">
                   {(["Unpaid", "Paid"] as ExpenseStatus[]).map(s => (
-                    <button
-                      key={s}
-                      className="flex-1 py-2 rounded-xl text-[13px] font-medium"
-                      style={{
-                        border: "none", cursor: "pointer",
-                        background: modalStatus === s ? s === "Paid" ? "rgba(59,158,149,0.12)" : "rgba(201,168,76,0.15)" : "#f4f3f0",
-                        color: modalStatus === s ? s === "Paid" ? "#16645d" : "#7a5e10" : "#6b6960",
-                      }}
-                      onClick={() => setModalStatus(s)}
-                    >
-                      {s}
-                    </button>
+                    <button key={s} className="flex-1 py-2 rounded-xl text-[13px] font-medium"
+                      style={{ border: "none", cursor: "pointer", background: modalStatus === s ? s === "Paid" ? "rgba(59,158,149,0.12)" : "rgba(201,168,76,0.15)" : "#f4f3f0", color: modalStatus === s ? s === "Paid" ? "#16645d" : "#7a5e10" : "#6b6960" }}
+                      onClick={() => setModalStatus(s)}>{s}</button>
                   ))}
                 </div>
               </div>
@@ -935,17 +983,12 @@ export default function ExpensesPage() {
                   <div>
                     <label style={LBL}>Paid by</label>
                     <div className="flex gap-2">
-                      {(["Travis", "Briana"] as ExpensePaidBy[]).map(p => {
+                      {(["Travis", "Briana"] as const).map(p => {
                         const col = p === "Travis" ? TRAVIS : BRIANA;
                         return (
-                          <button
-                            key={p}
-                            className="flex-1 py-2 rounded-xl text-[13px] font-medium"
+                          <button key={p} className="flex-1 py-2 rounded-xl text-[13px] font-medium"
                             style={{ border: "none", cursor: "pointer", background: paidBy === p ? col.bg : "#f4f3f0", color: paidBy === p ? col.text : "#6b6960" }}
-                            onClick={() => setPaidBy(p)}
-                          >
-                            {p}
-                          </button>
+                            onClick={() => setPaidBy(p)}>{p}</button>
                         );
                       })}
                     </div>
@@ -963,11 +1006,7 @@ export default function ExpensesPage() {
               <div className="flex flex-col gap-2 mt-1">
                 <div className="flex gap-2">
                   <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }} onClick={closeModal}>Cancel</button>
-                  <button
-                    className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
-                    style={{ background: canSave ? "#1c1c1a" : "#c8c5bf", color: "#fff", border: "none", cursor: canSave ? "pointer" : "not-allowed" }}
-                    onClick={handleSave}
-                  >
+                  <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: canSave ? "#1c1c1a" : "#c8c5bf", color: "#fff", border: "none", cursor: canSave ? "pointer" : "not-allowed" }} onClick={handleSave}>
                     {editId ? "Save changes" : "Add expense"}
                   </button>
                 </div>
@@ -982,46 +1021,118 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* ── Mark-as-Paid mini-modal ────────────────────────────────── */}
+      {/* ── Mark-as-Paid modal ────────────────────────────────────── */}
       {markingId && (
-        <div
-          className="fixed inset-0 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
-          onClick={e => { if (e.target === e.currentTarget) setMarkingId(null); }}
-        >
-          <div className="bg-white rounded-2xl" style={{ width: 320, padding: "24px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
-            <div className="flex items-center justify-between mb-5">
-              <div className="text-[14px] font-semibold" style={{ color: "#1c1c1a" }}>Mark as Paid</div>
+        <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setMarkingId(null); }}>
+          <div className="bg-white rounded-2xl" style={{ width: 340, padding: "24px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-[14px] font-semibold" style={{ color: "#1c1c1a" }}>Mark as Paid</div>
+                {markingExpense && (
+                  <div className="text-[12px] mt-0.5" style={{ color: "#9e9b93" }}>
+                    {markingExpense.description} · {fmtAmt(markingExpense.amount)}
+                  </div>
+                )}
+              </div>
               <button onClick={() => setMarkingId(null)} className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}>
                 <IconX size={14} strokeWidth={2} />
               </button>
             </div>
+
             <div className="flex flex-col gap-3">
-              <div>
-                <label style={LBL}>Who paid?</label>
-                <div className="flex gap-2">
-                  {(["Travis", "Briana"] as ExpensePaidBy[]).map(p => {
-                    const col = p === "Travis" ? TRAVIS : BRIANA;
-                    return (
-                      <button
-                        key={p}
-                        className="flex-1 py-2 rounded-xl text-[13px] font-medium"
-                        style={{ border: "none", cursor: "pointer", background: markPaidBy === p ? col.bg : "#f4f3f0", color: markPaidBy === p ? col.text : "#6b6960" }}
-                        onClick={() => setMarkPaidBy(p)}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
+              {/* Split toggle */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>Split payment</div>
+                  <div className="text-[11px]" style={{ color: "#9e9b93" }}>Divide between Travis and Briana</div>
                 </div>
+                <button
+                  className="text-[12px] font-semibold px-3 py-1.5 rounded-full"
+                  style={{ background: isSplit ? "#1c1c1a" : "#f0ede8", color: isSplit ? "#fff" : "#9e9b93", border: "none", cursor: "pointer", minWidth: 44, textAlign: "center" }}
+                  onClick={() => { setIsSplit(v => !v); setSplitTravis(""); setSplitBriana(""); }}
+                >
+                  {isSplit ? "On" : "Off"}
+                </button>
               </div>
+
+              {isSplit ? (
+                <>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label style={LBL}>Travis</label>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9e9b93", fontSize: 13, pointerEvents: "none" }}>$</span>
+                        <input
+                          type="number" min={0} step="0.01" value={splitTravis}
+                          onChange={e => setSplitTravis(e.target.value)}
+                          placeholder="0.00"
+                          style={{ ...IN, paddingLeft: 26 }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <label style={LBL}>Briana</label>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9e9b93", fontSize: 13, pointerEvents: "none" }}>$</span>
+                        <input
+                          type="number" min={0} step="0.01" value={splitBriana}
+                          onChange={e => setSplitBriana(e.target.value)}
+                          placeholder="0.00"
+                          style={{ ...IN, paddingLeft: 26 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Split helper + validation */}
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={splitEvenly}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                      style={{ background: "#f0ede8", color: "#6b6960", border: "none", cursor: "pointer" }}
+                    >
+                      Split evenly
+                    </button>
+                    {(splitTravis || splitBriana) && (
+                      <div className="text-[11.5px] font-medium" style={{ color: splitValid ? "#3b9e95" : "#b93228" }}>
+                        {splitValid
+                          ? `${fmtAmt(splitTravisAmt)} + ${fmtAmt(splitBrianaAmt)} ✓`
+                          : `${fmtAmt(splitSum)} / ${fmtAmt(expectedTotal)} total`
+                        }
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label style={LBL}>Who paid?</label>
+                  <div className="flex gap-2">
+                    {(["Travis", "Briana"] as const).map(p => {
+                      const col = p === "Travis" ? TRAVIS : BRIANA;
+                      return (
+                        <button key={p} className="flex-1 py-2 rounded-xl text-[13px] font-medium"
+                          style={{ border: "none", cursor: "pointer", background: markPaidBy === p ? col.bg : "#f4f3f0", color: markPaidBy === p ? col.text : "#6b6960" }}
+                          onClick={() => setMarkPaidBy(p)}>{p}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label style={LBL}>Date paid</label>
                 <input type="date" value={markPaidDate} onChange={e => setMarkPaidDate(e.target.value)} style={IN} />
               </div>
+
               <div className="flex gap-2 mt-1">
                 <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }} onClick={() => setMarkingId(null)}>Cancel</button>
-                <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "#3b9e95", color: "#fff", border: "none", cursor: "pointer" }} onClick={confirmMarkPaid}>Confirm</button>
+                <button
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                  style={{ background: canConfirmPaid ? "#3b9e95" : "#c8c5bf", color: "#fff", border: "none", cursor: canConfirmPaid ? "pointer" : "not-allowed" }}
+                  onClick={confirmMarkPaid}
+                >
+                  Confirm
+                </button>
               </div>
             </div>
           </div>
@@ -1030,24 +1141,11 @@ export default function ExpensesPage() {
 
       {/* ── Recurring template modal ───────────────────────────────── */}
       {showTplModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
-          onClick={e => { if (e.target === e.currentTarget) closeTplModal(); }}
-        >
-          <div
-            className="bg-white rounded-2xl"
-            style={{ width: 420, maxHeight: "92vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}
-          >
+        <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) closeTplModal(); }}>
+          <div className="bg-white rounded-2xl" style={{ width: 420, maxHeight: "92vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
             <div className="flex items-center justify-between mb-5">
-              <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
-                {editTplId ? "Edit recurring bill" : "New recurring bill"}
-              </div>
-              <button
-                onClick={closeTplModal}
-                className="flex items-center justify-center rounded-full"
-                style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}
-              >
+              <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>{editTplId ? "Edit recurring bill" : "New recurring bill"}</div>
+              <button onClick={closeTplModal} className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}>
                 <IconX size={14} strokeWidth={2} />
               </button>
             </div>
@@ -1055,11 +1153,7 @@ export default function ExpensesPage() {
             <div className="flex flex-col gap-3">
               <div>
                 <label style={LBL}>Name</label>
-                <input
-                  type="text" value={tplName} onChange={e => setTplName(e.target.value)}
-                  placeholder="e.g. Electric Bill" autoFocus style={IN}
-                  onKeyDown={e => e.key === "Enter" && handleSaveTemplate()}
-                />
+                <input type="text" value={tplName} onChange={e => setTplName(e.target.value)} placeholder="e.g. Electric Bill" autoFocus style={IN} onKeyDown={e => e.key === "Enter" && handleSaveTemplate()} />
               </div>
               <div>
                 <label style={LBL}>Category</label>
@@ -1072,53 +1166,44 @@ export default function ExpensesPage() {
                   <label style={LBL}>Default amount</label>
                   <div style={{ position: "relative" }}>
                     <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9e9b93", fontSize: 13, pointerEvents: "none" }}>$</span>
-                    <input
-                      type="number" min={0} step="0.01" value={tplAmount}
-                      onChange={e => setTplAmount(e.target.value)} placeholder="0.00"
-                      style={{ ...IN, paddingLeft: 26 }}
-                    />
+                    <input type="number" min={0} step="0.01" value={tplAmount} onChange={e => setTplAmount(e.target.value)} placeholder="0.00" style={{ ...IN, paddingLeft: 26 }} />
                   </div>
                 </div>
                 <div className="flex-1">
                   <label style={LBL}>Due day of month</label>
-                  <input
-                    type="number" min={1} max={31} value={tplDueDay}
-                    onChange={e => setTplDueDay(e.target.value)} placeholder="1"
-                    style={IN}
-                  />
+                  <input type="number" min={1} max={31} value={tplDueDay} onChange={e => setTplDueDay(e.target.value)} placeholder="1" style={IN} />
                 </div>
               </div>
               <div>
-                <label style={LBL}>Paid by default</label>
+                <label style={LBL}>Generation</label>
                 <div className="flex gap-2">
-                  {(["Travis", "Briana"] as ExpensePaidBy[]).map(p => {
-                    const col = p === "Travis" ? TRAVIS : BRIANA;
-                    return (
-                      <button
-                        key={p}
-                        className="flex-1 py-2 rounded-xl text-[13px] font-medium"
-                        style={{ border: "none", cursor: "pointer", background: tplPaidBy === p ? col.bg : "#f4f3f0", color: tplPaidBy === p ? col.text : "#6b6960" }}
-                        onClick={() => setTplPaidBy(p)}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
+                  {([
+                    { key: "automatic" as const, label: "Automatic" },
+                    { key: "manual"    as const, label: "Manual" },
+                  ]).map(({ key, label }) => (
+                    <button key={key} className="flex-1 py-2 rounded-xl text-[13px] font-medium"
+                      style={{ border: "none", cursor: "pointer", background: tplGenMode === key ? "#1c1c1a" : "#f4f3f0", color: tplGenMode === key ? "#fff" : "#6b6960" }}
+                      onClick={() => setTplGenMode(key)}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[11px] mt-1.5" style={{ color: "#9e9b93" }}>
+                  {tplGenMode === "automatic"
+                    ? "Generates on the 1st of each month automatically"
+                    : 'Use "Push to month" to generate on demand for any month'}
                 </div>
               </div>
               <div className="flex items-center justify-between py-1">
                 <div>
                   <div className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>Active</div>
-                  <div className="text-[11px]" style={{ color: "#9e9b93" }}>Auto-generate this month's entry when active</div>
+                  <div className="text-[11px]" style={{ color: "#9e9b93" }}>
+                    {tplGenMode === "automatic" ? "Enables auto-generation" : "Enables Push to month"}
+                  </div>
                 </div>
                 <button
-                  className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-full"
-                  style={{
-                    background: tplActive ? "rgba(59,158,149,0.12)" : "#f0ede8",
-                    color:      tplActive ? "#3b9e95"               : "#9e9b93",
-                    border: "none", cursor: "pointer",
-                    minWidth: 52, justifyContent: "center",
-                  }}
+                  className="text-[12px] font-semibold px-3 py-1.5 rounded-full"
+                  style={{ background: tplActive ? "rgba(59,158,149,0.12)" : "#f0ede8", color: tplActive ? "#3b9e95" : "#9e9b93", border: "none", cursor: "pointer", minWidth: 44, textAlign: "center" }}
                   onClick={() => setTplActive(v => !v)}
                 >
                   {tplActive ? "On" : "Off"}
@@ -1126,14 +1211,8 @@ export default function ExpensesPage() {
               </div>
               <div className="flex flex-col gap-2 mt-1">
                 <div className="flex gap-2">
-                  <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }} onClick={closeTplModal}>
-                    Cancel
-                  </button>
-                  <button
-                    className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
-                    style={{ background: canSaveTpl ? "#1c1c1a" : "#c8c5bf", color: "#fff", border: "none", cursor: canSaveTpl ? "pointer" : "not-allowed" }}
-                    onClick={handleSaveTemplate}
-                  >
+                  <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }} onClick={closeTplModal}>Cancel</button>
+                  <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: canSaveTpl ? "#1c1c1a" : "#c8c5bf", color: "#fff", border: "none", cursor: canSaveTpl ? "pointer" : "not-allowed" }} onClick={handleSaveTemplate}>
                     {editTplId ? "Save changes" : "Add template"}
                   </button>
                 </div>
@@ -1148,44 +1227,94 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* ── Manage categories modal ────────────────────────────────── */}
-      {showCatModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
-          onClick={e => { if (e.target === e.currentTarget) setShowCatModal(false); }}
-        >
-          <div
-            className="bg-white rounded-2xl"
-            style={{ width: 380, maxHeight: "80vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>Manage Categories</div>
-              <button
-                onClick={() => setShowCatModal(false)}
-                className="flex items-center justify-center rounded-full"
-                style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}
-              >
+      {/* ── Push to month modal ────────────────────────────────────── */}
+      {showPushModal && pushTemplate && (
+        <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setShowPushModal(false); }}>
+          <div className="bg-white rounded-2xl" style={{ width: 340, padding: "24px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-[14px] font-semibold" style={{ color: "#1c1c1a" }}>Push to Month</div>
+                <div className="text-[12px] mt-0.5" style={{ color: "#9e9b93" }}>
+                  {pushTemplate.name} · {fmtAmt(pushTemplate.defaultAmount)}
+                </div>
+              </div>
+              <button onClick={() => setShowPushModal(false)} className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}>
                 <IconX size={14} strokeWidth={2} />
               </button>
             </div>
 
-            {/* Default categories */}
+            <div className="flex flex-col gap-3">
+              <div>
+                <label style={LBL}>Month</label>
+                <div className="flex gap-2">
+                  <select
+                    value={pushMonth}
+                    onChange={e => setPushMonth(Number(e.target.value))}
+                    style={{ ...IN, flex: 1, appearance: "auto" as never }}
+                  >
+                    {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                  </select>
+                  <select
+                    value={pushYear}
+                    onChange={e => setPushYear(Number(e.target.value))}
+                    style={{ ...IN, width: 90, appearance: "auto" as never }}
+                  >
+                    {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Due date preview */}
+              <div className="rounded-xl text-[12px]" style={{ padding: "10px 12px", background: "#f9f8f6", border: "1px solid #ede9e3", color: "#6b6960" }}>
+                Creates an unpaid entry due{" "}
+                <span style={{ color: "#1c1c1a", fontWeight: 500 }}>
+                  {MONTHS[pushMonth - 1]} {Math.min(pushTemplate.dueDayOfMonth, new Date(pushYear, pushMonth, 0).getDate())}, {pushYear}
+                </span>
+              </div>
+
+              {/* Already exists warning */}
+              {pushAlreadyExists && (
+                <div className="rounded-xl text-[12px] font-medium" style={{ padding: "10px 12px", background: "rgba(185,50,40,0.08)", color: "#b93228" }}>
+                  An entry for {pushTemplate.name} already exists in {MONTHS[pushMonth - 1]} {pushYear}.
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-1">
+                <button className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }} onClick={() => setShowPushModal(false)}>Cancel</button>
+                <button
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                  style={{ background: pushAlreadyExists ? "#c8c5bf" : "#3b9e95", color: "#fff", border: "none", cursor: pushAlreadyExists ? "not-allowed" : "pointer" }}
+                  onClick={confirmPushToMonth}
+                >
+                  Push
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Manage categories modal ────────────────────────────────── */}
+      {showCatModal && (
+        <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }} onClick={e => { if (e.target === e.currentTarget) setShowCatModal(false); }}>
+          <div className="bg-white rounded-2xl" style={{ width: 380, maxHeight: "80vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>Manage Categories</div>
+              <button onClick={() => setShowCatModal(false)} className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: "#f4f3f0", border: "none", cursor: "pointer", color: "#6b6960" }}>
+                <IconX size={14} strokeWidth={2} />
+              </button>
+            </div>
+
             <div className="mb-5">
               <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] mb-2.5" style={{ color: "#9e9b93" }}>Default</div>
               <div className="flex flex-wrap gap-2">
                 {DEFAULT_EXPENSE_CATEGORIES.map(cat => {
                   const c = getCatStyle(cat);
-                  return (
-                    <span key={cat} className="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style={{ background: c.bg, color: c.text }}>
-                      {cat}
-                    </span>
-                  );
+                  return <span key={cat} className="text-[11.5px] font-medium px-2.5 py-1 rounded-full" style={{ background: c.bg, color: c.text }}>{cat}</span>;
                 })}
               </div>
             </div>
 
-            {/* Custom categories */}
             {customCategories.length > 0 && (
               <div className="mb-5">
                 <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] mb-2.5" style={{ color: "#9e9b93" }}>Custom</div>
@@ -1197,15 +1326,10 @@ export default function ExpensesPage() {
                         <span className="text-[13px] font-medium" style={{ color: "#1c1c1a" }}>{cat}</span>
                         <button
                           className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-                          style={{
-                            background: inUse ? "#f4f3f0" : "rgba(185,50,40,0.08)",
-                            color:      inUse ? "#c8c5bf" : "#b93228",
-                            border: "none",
-                            cursor: inUse ? "default" : "pointer",
-                          }}
+                          style={{ background: inUse ? "#f4f3f0" : "rgba(185,50,40,0.08)", color: inUse ? "#c8c5bf" : "#b93228", border: "none", cursor: inUse ? "default" : "pointer" }}
                           onClick={() => { if (!inUse) removeCategory(cat); }}
-                          title={inUse ? "Category is used by existing expenses" : "Delete category"}
                           disabled={inUse}
+                          title={inUse ? "Category is used by existing expenses" : "Delete category"}
                         >
                           {inUse ? "In use" : "Delete"}
                         </button>
@@ -1216,27 +1340,17 @@ export default function ExpensesPage() {
               </div>
             )}
 
-            {/* Add new category */}
             <div style={{ height: 1, background: "#f0ede8", marginBottom: 16 }} />
             <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] mb-2.5" style={{ color: "#9e9b93" }}>Add Custom Category</div>
             <div className="flex gap-2">
               <input
-                type="text"
-                value={newCatInput}
-                onChange={e => setNewCatInput(e.target.value)}
+                type="text" value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleAddCategory()}
-                placeholder="Category name"
-                style={{ ...IN, flex: 1 }}
+                placeholder="Category name" style={{ ...IN, flex: 1 }}
               />
               <button
                 onClick={handleAddCategory}
-                style={{
-                  background: newCatInput.trim() ? "#1c1c1a" : "#c8c5bf",
-                  color: "#fff", border: "none", borderRadius: 8,
-                  padding: "9px 16px", cursor: newCatInput.trim() ? "pointer" : "default",
-                  fontSize: 13, fontWeight: 500, whiteSpace: "nowrap",
-                  fontFamily: "var(--font-inter), sans-serif",
-                }}
+                style={{ background: newCatInput.trim() ? "#1c1c1a" : "#c8c5bf", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: newCatInput.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", fontFamily: "var(--font-inter), sans-serif" }}
               >
                 Add
               </button>
