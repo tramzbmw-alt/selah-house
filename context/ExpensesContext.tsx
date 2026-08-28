@@ -21,6 +21,8 @@ export type Expense = {
   notes?: string;
   templateId?: string;
   vendorId?: string;
+  maintenanceTaskId?: string;
+  source?: "maintenance";
 };
 
 export type RecurringTemplate = {

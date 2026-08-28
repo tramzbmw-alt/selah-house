@@ -7,6 +7,7 @@ import Topbar from "@/components/Topbar";
 import MaintenanceModal from "@/components/MaintenanceModal";
 import { useMaintenance, deriveStatus, type MaintenanceTask, type TaskCategory, type TaskStatus } from "@/context/MaintenanceContext";
 import { useVendors } from "@/context/VendorsContext";
+import { useExpenses } from "@/context/ExpensesContext";
 import { formatShortDate } from "@/lib/stayUtils";
 
 function catIcon(cat: TaskCategory) {
@@ -38,6 +39,7 @@ function sortTasks(tasks: MaintenanceTask[]) {
 export default function MaintenancePage() {
   const { tasks, addTask, updateTask, removeTask, completeTask } = useMaintenance();
   const { vendors } = useVendors();
+  const { expenses, addExpense } = useExpenses();
 
   const [filter,      setFilter]      = useState<Filter>("All");
   const [showModal,   setShowModal]   = useState(false);
@@ -75,7 +77,25 @@ export default function MaintenancePage() {
   }
 
   function handleComplete(completedDate: string, actualCost?: number) {
-    if (editingTask) completeTask(editingTask.id, completedDate, actualCost);
+    if (!editingTask) return;
+    completeTask(editingTask.id, completedDate, actualCost);
+    if (actualCost && actualCost > 0) {
+      const alreadyLinked = expenses.some(e => e.maintenanceTaskId === editingTask.id);
+      if (!alreadyLinked) {
+        addExpense({
+          category:          "Maintenance",
+          description:       editingTask.title,
+          amount:            actualCost,
+          dueDate:           completedDate,
+          status:            "Paid",
+          datePaid:          completedDate,
+          recurrence:        "One-time",
+          vendorId:          editingTask.vendorId,
+          maintenanceTaskId: editingTask.id,
+          source:            "maintenance",
+        });
+      }
+    }
     closeModal();
   }
 

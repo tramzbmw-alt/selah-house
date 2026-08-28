@@ -725,14 +725,24 @@ export default function ExpensesPage() {
                           className="flex items-center gap-3 py-3"
                           style={{ borderBottom: isLast ? "none" : "1px solid #f0ede8" }}
                         >
-                          <button
-                            className="text-[10.5px] font-medium px-2.5 py-1 rounded-full flex-shrink-0 whitespace-nowrap"
-                            style={{ background: c.bg, color: c.text, border: "none", cursor: "pointer" }}
-                            onClick={() => setHistoryCategory(exp.category)}
-                            title={`View ${exp.category} history`}
-                          >
-                            {exp.category}
-                          </button>
+                          <div className="flex flex-col gap-1 flex-shrink-0 items-start">
+                            <button
+                              className="text-[10.5px] font-medium px-2.5 py-1 rounded-full whitespace-nowrap"
+                              style={{ background: c.bg, color: c.text, border: "none", cursor: "pointer" }}
+                              onClick={() => setHistoryCategory(exp.category)}
+                              title={`View ${exp.category} history`}
+                            >
+                              {exp.category}
+                            </button>
+                            {exp.source === "maintenance" && (
+                              <span
+                                className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                                style={{ background: "rgba(192,128,64,0.13)", color: "#7a4e10", letterSpacing: "0.03em" }}
+                              >
+                                From Maintenance
+                              </span>
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-[13px] font-medium truncate" style={{ color: "#1c1c1a" }}>{exp.description}</div>
                             <div className="text-[11.5px] mt-0.5" style={{ color: "#9e9b93" }}>
