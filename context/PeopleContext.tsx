@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { peopleEvents } from "@/lib/peopleEvents";
 
 export type GuestType  = "owner" | "paid";
 export type OwnerAssoc = "Travis" | "Briana" | "Both";
@@ -50,13 +51,19 @@ export function PeopleProvider({ children }: { children: ReactNode }) {
   const [people,  setPeople]  = useState<PersonEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadPeople = useCallback(() => {
     supabase.from("people").select("*").order("created_at")
       .then(({ data }) => {
         if (data) setPeople(data.map(mapRow));
         setLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    loadPeople();
+    const unsub = peopleEvents.onRefresh(loadPeople);
+    return unsub;
+  }, [loadPeople]);
 
   function addPerson(p: Omit<PersonEntry, "id">) {
     supabase.from("people").insert(toRow(p)).select().single()

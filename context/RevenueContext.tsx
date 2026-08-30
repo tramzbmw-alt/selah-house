@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import { stayEvents } from "@/lib/stayEvents";
+import { peopleEvents } from "@/lib/peopleEvents";
 
 export type PaymentStatus  = "Pending" | "Paid" | "Refunded";
 export type PaymentMethod  = "Cash" | "Venmo" | "Zelle" | "Stripe";
@@ -103,7 +104,25 @@ export function RevenueProvider({ children }: { children: ReactNode }) {
       const { error: stayErr } = await supabase.from("stays").insert(stayPayload);
       if (stayErr) console.error("[Revenue] stay insert error:", stayErr);
 
-      // 3. Refresh calendar immediately
+      // 3. Auto-add guest to People as a Paid Guest if not already present
+      const { data: existing } = await supabase
+        .from("people")
+        .select("id")
+        .ilike("name", entry.guestName)
+        .limit(1);
+      if (!existing || existing.length === 0) {
+        const { error: personErr } = await supabase.from("people").insert({
+          name:         entry.guestName,
+          type:         "paid",
+          relationship: "Guest",
+          owner:        null,
+          rate:         null,
+        });
+        if (personErr) console.error("[Revenue] person insert error:", personErr);
+        else peopleEvents.refresh();
+      }
+
+      // 4. Refresh calendar immediately
       stayEvents.refresh();
     })();
   }
