@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { stayEvents } from "@/lib/stayEvents";
 
 export type Person     = "Travis" | "Briana";
 export type StayPerson = Person | "Both";
@@ -13,13 +14,14 @@ export type Stay = {
   nights: number;
   guest?: string;
   cost: number;
+  revenueId?: string;  // set when stay was created from a revenue entry
 };
 
 type StaysCtx = {
   stays: Stay[];
   loading: boolean;
-  addStay: (s: Omit<Stay, "id">) => void;
-  updateStay: (id: string, s: Omit<Stay, "id">) => void;
+  addStay: (s: Omit<Stay, "id" | "revenueId">) => void;
+  updateStay: (id: string, s: Omit<Stay, "id" | "revenueId">) => void;
   removeStay: (id: string) => void;
 };
 
@@ -31,10 +33,11 @@ function mapRow(r: any): Stay {
     nights:    r.nights,
     guest:     r.guest ?? undefined,
     cost:      r.cost,
+    revenueId: r.revenue_id ?? undefined,
   };
 }
 
-function toRow(s: Omit<Stay, "id">) {
+function toRow(s: Omit<Stay, "id" | "revenueId">) {
   return {
     person:     s.person ?? null,
     start_date: s.startDate,
@@ -50,7 +53,7 @@ export function StaysProvider({ children }: { children: ReactNode }) {
   const [stays,   setStays]   = useState<Stay[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadStays = useCallback(() => {
     supabase.from("stays").select("*").order("start_date")
       .then(({ data }) => {
         if (data) setStays(data.map(mapRow));
@@ -58,7 +61,14 @@ export function StaysProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  function addStay(s: Omit<Stay, "id">) {
+  useEffect(() => {
+    loadStays();
+    // Re-fetch whenever RevenueContext mutates stays
+    const unsub = stayEvents.onRefresh(loadStays);
+    return unsub;
+  }, [loadStays]);
+
+  function addStay(s: Omit<Stay, "id" | "revenueId">) {
     supabase.from("stays").insert(toRow(s)).select().single()
       .then(({ data, error }) => {
         if (error) { console.error(error); return; }
@@ -66,7 +76,7 @@ export function StaysProvider({ children }: { children: ReactNode }) {
       });
   }
 
-  function updateStay(id: string, s: Omit<Stay, "id">) {
+  function updateStay(id: string, s: Omit<Stay, "id" | "revenueId">) {
     supabase.from("stays").update(toRow(s)).eq("id", id).select().single()
       .then(({ data, error }) => {
         if (error) { console.error(error); return; }

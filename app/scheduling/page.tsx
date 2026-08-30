@@ -5,7 +5,7 @@ import { IconCalendarEvent, IconChevronLeft, IconChevronRight, IconTrash, IconX 
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { useStays, type StayPerson, type Stay } from "@/context/StaysContext";
-import { usePeople } from "@/context/PeopleContext";
+import { usePeople, type PersonEntry } from "@/context/PeopleContext";
 import { useMaintenance, deriveStatus, type TaskStatus } from "@/context/MaintenanceContext";
 import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, BOTH, PAID, stayColors, personColors, formatStayRange, formatShortDate } from "@/lib/stayUtils";
 
@@ -103,6 +103,27 @@ export default function SchedulingPage() {
     setCost(isNaN(n) || n < 0 ? 0 : n);
   }
 
+  function handlePersonChipClick(p: PersonEntry) {
+    const isDeselecting = guest === p.name;
+    if (isDeselecting) {
+      setGuest("");
+      setCost(0);
+      setCostInput("0");
+    } else {
+      setGuest(p.name);
+      if (p.type === "paid") {
+        const rate = p.rate ?? 0;
+        setCost(rate);
+        setCostInput(String(rate));
+      } else {
+        // Owner guest — clear cost and set person from their association
+        setCost(0);
+        setCostInput("0");
+        if (p.owner) setPerson(p.owner);
+      }
+    }
+  }
+
   function handleConfirm() {
     if (!modal) return;
     const isEdit = !!(modal.existing && modal.editing);
@@ -125,10 +146,10 @@ export default function SchedulingPage() {
     if (modal?.existing) { removeStay(modal.existing.id); setModal(null); }
   }
 
-  const isEdit    = !!(modal?.existing && modal.editing);
-  const isDetails = !!(modal?.existing && !modal.editing);
-  const chipPeople = cost > 0 ? people.filter(p => p.type === "paid") : people.filter(p => p.type === "owner");
-  const confirmBg  = cost > 0 ? PAID.solid : personColors(person).solid;
+  const isEdit       = !!(modal?.existing && modal.editing);
+  const isDetails    = !!(modal?.existing && !modal.editing);
+  const isRevManaged = !!(modal?.existing?.revenueId);
+  const confirmBg    = cost > 0 ? PAID.solid : personColors(person).solid;
 
   const modalTitle = isEdit ? "Edit stay" : isDetails ? "Stay details" : "Add a stay";
   const modalSub   = isEdit && modal?.existing
@@ -334,7 +355,7 @@ export default function SchedulingPage() {
             {isDetails ? (
               <>
                 <div
-                  className="rounded-xl flex items-center gap-3 mb-5"
+                  className="rounded-xl flex items-center gap-3 mb-3"
                   style={{ padding: "14px 16px", background: stayColors(modal.existing!).bg }}
                 >
                   <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: stayColors(modal.existing!).solid }} />
@@ -348,13 +369,20 @@ export default function SchedulingPage() {
                     </div>
                   </div>
                 </div>
-                <button
-                  className="w-full py-2.5 rounded-xl text-[13px] font-medium mb-2"
-                  style={{ background: "#f4f3f0", color: "#1c1c1a", border: "none", cursor: "pointer" }}
-                  onClick={enterEditMode}
-                >
-                  Edit stay
-                </button>
+                {isRevManaged && (
+                  <div className="mb-3 text-[11px] rounded-lg px-3 py-2" style={{ background: "rgba(201,168,76,0.1)", color: "#7a5e10" }}>
+                    Managed via Revenue — edit or remove from the Revenue page.
+                  </div>
+                )}
+                {!isRevManaged && (
+                  <button
+                    className="w-full py-2.5 rounded-xl text-[13px] font-medium mb-2"
+                    style={{ background: "#f4f3f0", color: "#1c1c1a", border: "none", cursor: "pointer" }}
+                    onClick={enterEditMode}
+                  >
+                    Edit stay
+                  </button>
+                )}
                 <div className="flex gap-2">
                   <button
                     className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
@@ -363,13 +391,15 @@ export default function SchedulingPage() {
                   >
                     Close
                   </button>
-                  <button
-                    className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
-                    style={{ background: "rgba(185,50,40,0.1)", color: "#b93228", border: "none", cursor: "pointer" }}
-                    onClick={handleRemove}
-                  >
-                    Remove
-                  </button>
+                  {!isRevManaged && (
+                    <button
+                      className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                      style={{ background: "rgba(185,50,40,0.1)", color: "#b93228", border: "none", cursor: "pointer" }}
+                      onClick={handleRemove}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -440,22 +470,29 @@ export default function SchedulingPage() {
                       fontFamily: "var(--font-inter), sans-serif", boxSizing: "border-box",
                     }}
                   />
-                  {chipPeople.length > 0 && (
+                  {people.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {chipPeople.map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => setGuest(g => g === p.name ? "" : p.name)}
-                          style={{
-                            fontSize: 11, padding: "3px 10px", borderRadius: 999,
-                            border: "none", cursor: "pointer",
-                            background: guest === p.name ? "#1c1c1a" : "#f0ede8",
-                            color:      guest === p.name ? "#fff"    : "#6b6960",
-                          }}
-                        >
-                          {p.name}
-                        </button>
-                      ))}
+                      {people.map(p => {
+                        const isSelected = guest === p.name;
+                        const isPaid     = p.type === "paid";
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => handlePersonChipClick(p)}
+                            style={{
+                              fontSize: 11, padding: "3px 10px", borderRadius: 999,
+                              border: isPaid ? "1px solid rgba(201,168,76,0.35)" : "1px solid transparent",
+                              cursor: "pointer",
+                              background: isSelected
+                                ? (isPaid ? PAID.solid : "#1c1c1a")
+                                : (isPaid ? "rgba(201,168,76,0.1)" : "#f0ede8"),
+                              color: isSelected ? "#fff" : (isPaid ? "#7a5e10" : "#6b6960"),
+                            }}
+                          >
+                            {p.name}{isPaid && p.rate ? ` · $${p.rate}/n` : ""}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

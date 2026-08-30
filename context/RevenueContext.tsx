@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { stayEvents } from "@/lib/stayEvents";
 
 export type PaymentStatus  = "Pending" | "Paid" | "Refunded";
 export type PaymentMethod  = "Cash" | "Venmo" | "Zelle" | "Stripe";
@@ -57,6 +58,19 @@ function toRow(e: Omit<RevenueEntry, "id">) {
   };
 }
 
+function stayRowFromEntry(entry: RevenueEntry) {
+  return {
+    person:         null,
+    guest:          entry.guestName,
+    start_date:     entry.checkIn,
+    nights:         entry.nights,
+    cost:           entry.totalAmount,
+    payment_status: entry.paymentStatus,
+    payment_method: entry.paymentMethod,
+    payment_notes:  null,
+  };
+}
+
 type RevenueCtx = {
   entries:           RevenueEntry[];
   loading:           boolean;
@@ -77,7 +91,6 @@ export function RevenueProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     Promise.all([
       supabase.from("revenue").select("*").order("check_in"),
-      // Load payment info for paid stays
       supabase.from("stays").select("id,payment_status,payment_method,payment_notes").gt("cost", 0),
     ]).then(([{ data: revRows }, { data: stayRows }]) => {
       if (revRows) setEntries(revRows.map(mapEntry));
@@ -99,29 +112,55 @@ export function RevenueProvider({ children }: { children: ReactNode }) {
   }, []);
 
   function addEntry(data: Omit<RevenueEntry, "id">) {
-    supabase.from("revenue").insert(toRow(data)).select().single()
-      .then(({ data: row, error }) => {
-        if (error) { console.error(error); return; }
-        if (row) setEntries(prev => [...prev, mapEntry(row)]);
+    void (async () => {
+      // Insert revenue entry
+      const { data: row, error } = await supabase.from("revenue").insert(toRow(data)).select().single();
+      if (error) { console.error(error); return; }
+      if (!row) return;
+
+      const entry = mapEntry(row);
+      setEntries(prev => [...prev, entry]);
+
+      // Create linked stay (upsert by revenue_id to avoid duplicates)
+      const { error: stayErr } = await supabase.from("stays").insert({
+        ...stayRowFromEntry(entry),
+        revenue_id: entry.id,
       });
+      if (stayErr) console.error(stayErr);
+
+      stayEvents.refresh();
+    })();
   }
 
   function updateEntry(id: string, data: Partial<Omit<RevenueEntry, "id">>) {
-    const current = entries.find(e => e.id === id);
-    if (!current) return;
-    const merged = { ...current, ...data };
-    supabase.from("revenue").update(toRow(merged)).eq("id", id).select().single()
-      .then(({ data: row, error }) => {
-        if (error) { console.error(error); return; }
-        if (row) setEntries(prev => prev.map(e => e.id === id ? mapEntry(row) : e));
-      });
+    void (async () => {
+      const current = entries.find(e => e.id === id);
+      if (!current) return;
+      const merged = { ...current, ...data };
+
+      // Update revenue entry
+      const { data: row, error } = await supabase
+        .from("revenue").update(toRow(merged)).eq("id", id).select().single();
+      if (error) { console.error(error); return; }
+      if (row) setEntries(prev => prev.map(e => e.id === id ? mapEntry(row) : e));
+
+      // Update linked stay
+      const { error: stayErr } = await supabase.from("stays")
+        .update(stayRowFromEntry(merged))
+        .eq("revenue_id", id);
+      if (stayErr) console.error(stayErr);
+
+      stayEvents.refresh();
+    })();
   }
 
   function removeEntry(id: string) {
+    // ON DELETE CASCADE on revenue_id removes the linked stay automatically
     supabase.from("revenue").delete().eq("id", id)
       .then(({ error }) => {
         if (error) { console.error(error); return; }
         setEntries(prev => prev.filter(e => e.id !== id));
+        stayEvents.refresh();
       });
   }
 
