@@ -1,47 +1,92 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type Person     = "Travis" | "Briana";
-export type StayPerson = Person | "Both"; // "Both" = shared family guest
+export type StayPerson = Person | "Both";
 
 export type Stay = {
   id: string;
-  person?: StayPerson; // undefined for paid guest stays
+  person?: StayPerson;
   startDate: string;   // "YYYY-MM-DD"
   nights: number;
-  guest?: string;      // optional name shown on calendar; color still reflects person/paid
-  cost: number;        // 0 = owner/owner-guest stay; >0 = paid guest stay
+  guest?: string;
+  cost: number;
 };
 
 type StaysCtx = {
   stays: Stay[];
+  loading: boolean;
   addStay: (s: Omit<Stay, "id">) => void;
   updateStay: (id: string, s: Omit<Stay, "id">) => void;
   removeStay: (id: string) => void;
 };
 
+function mapRow(r: any): Stay {
+  return {
+    id:        r.id,
+    person:    r.person ?? undefined,
+    startDate: r.start_date,
+    nights:    r.nights,
+    guest:     r.guest ?? undefined,
+    cost:      r.cost,
+  };
+}
+
+function toRow(s: Omit<Stay, "id">) {
+  return {
+    person:     s.person ?? null,
+    start_date: s.startDate,
+    nights:     s.nights,
+    guest:      s.guest ?? null,
+    cost:       s.cost,
+  };
+}
+
 const Ctx = createContext<StaysCtx | null>(null);
 
-const SEED: Stay[] = [
-  { id: "seed-1", person: "Travis",  startDate: "2026-08-18", nights: 5, cost: 0 },
-  { id: "seed-2", person: "Briana",  startDate: "2026-09-04", nights: 3, cost: 0 },
-  { id: "seed-3", startDate: "2026-08-08", nights: 5, cost: 1250, guest: "Sarah & Mike" },
-];
-
 export function StaysProvider({ children }: { children: ReactNode }) {
-  const [stays, setStays] = useState<Stay[]>(SEED);
+  const [stays,   setStays]   = useState<Stay[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addStay = (s: Omit<Stay, "id">) =>
-    setStays(prev => [...prev, { ...s, id: crypto.randomUUID() }]);
+  useEffect(() => {
+    supabase.from("stays").select("*").order("start_date")
+      .then(({ data }) => {
+        if (data) setStays(data.map(mapRow));
+        setLoading(false);
+      });
+  }, []);
 
-  const updateStay = (id: string, s: Omit<Stay, "id">) =>
-    setStays(prev => prev.map(st => st.id === id ? { ...s, id } : st));
+  function addStay(s: Omit<Stay, "id">) {
+    supabase.from("stays").insert(toRow(s)).select().single()
+      .then(({ data, error }) => {
+        if (error) { console.error(error); return; }
+        if (data) setStays(prev => [...prev, mapRow(data)]);
+      });
+  }
 
-  const removeStay = (id: string) =>
-    setStays(prev => prev.filter(s => s.id !== id));
+  function updateStay(id: string, s: Omit<Stay, "id">) {
+    supabase.from("stays").update(toRow(s)).eq("id", id).select().single()
+      .then(({ data, error }) => {
+        if (error) { console.error(error); return; }
+        if (data) setStays(prev => prev.map(st => st.id === id ? mapRow(data) : st));
+      });
+  }
 
-  return <Ctx.Provider value={{ stays, addStay, updateStay, removeStay }}>{children}</Ctx.Provider>;
+  function removeStay(id: string) {
+    supabase.from("stays").delete().eq("id", id)
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+        setStays(prev => prev.filter(s => s.id !== id));
+      });
+  }
+
+  return (
+    <Ctx.Provider value={{ stays, loading, addStay, updateStay, removeStay }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useStays() {

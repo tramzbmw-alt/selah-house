@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type ExpenseCategory   = string;
 export type ExpensePaidBy     = "Travis" | "Briana" | "Split";
@@ -12,11 +13,11 @@ export type Expense = {
   category: string;
   description: string;
   amount: number;
-  dueDate: string;          // YYYY-MM-DD
+  dueDate: string;
   status: ExpenseStatus;
   paidBy?: ExpensePaidBy;
   datePaid?: string;
-  splitPayment?: { travis: number; briana: number }; // only when paidBy === "Split"
+  splitPayment?: { travis: number; briana: number };
   recurrence: ExpenseRecurrence;
   notes?: string;
   templateId?: string;
@@ -30,7 +31,7 @@ export type RecurringTemplate = {
   name: string;
   category: string;
   defaultAmount: number;
-  dueDayOfMonth: number;             // 1–31
+  dueDayOfMonth: number;
   generateMode: "automatic" | "manual";
   active: boolean;
 };
@@ -58,28 +59,71 @@ export function templateDueDate(t: Pick<RecurringTemplate, "dueDayOfMonth">, yea
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-const SEED_TEMPLATES: RecurringTemplate[] = [
-  { id: "rt1", name: "Mortgage",             category: "Mortgage",      defaultAmount: 2400, dueDayOfMonth: 1,  generateMode: "automatic", active: true },
-  { id: "rt2", name: "Electric",             category: "Electric",      defaultAmount: 185,  dueDayOfMonth: 5,  generateMode: "automatic", active: true },
-  { id: "rt3", name: "Water",                category: "Water",         defaultAmount: 65,   dueDayOfMonth: 7,  generateMode: "automatic", active: true },
-  { id: "rt4", name: "Homeowners Insurance", category: "Insurance",     defaultAmount: 220,  dueDayOfMonth: 25, generateMode: "automatic", active: true },
-  { id: "rt5", name: "Pool Service",         category: "Miscellaneous", defaultAmount: 95,   dueDayOfMonth: 28, generateMode: "automatic", active: true },
-];
+function mapExpense(r: any): Expense {
+  return {
+    id:                r.id,
+    category:          r.category,
+    description:       r.description,
+    amount:            r.amount,
+    dueDate:           r.due_date,
+    status:            r.status,
+    paidBy:            r.paid_by ?? undefined,
+    datePaid:          r.date_paid ?? undefined,
+    splitPayment:      r.split_payment ?? undefined,
+    recurrence:        r.recurrence,
+    notes:             r.notes ?? undefined,
+    templateId:        r.template_id ?? undefined,
+    vendorId:          r.vendor_id ?? undefined,
+    maintenanceTaskId: r.maintenance_task_id ?? undefined,
+    source:            r.source ?? undefined,
+  };
+}
 
-const SEED: Expense[] = [
-  { id: "ex1", category: "Mortgage",      description: "Mortgage",             amount: 2400, dueDate: "2026-08-01", status: "Paid",   paidBy: "Travis", datePaid: "2026-08-01", recurrence: "Monthly",  templateId: "rt1" },
-  { id: "ex2", category: "Electric",      description: "Electric",             amount: 185,  dueDate: "2026-08-05", status: "Paid",   paidBy: "Briana", datePaid: "2026-08-05", recurrence: "Monthly",  templateId: "rt2" },
-  { id: "ex3", category: "Water",         description: "Water",                amount: 65,   dueDate: "2026-08-07", status: "Paid",   paidBy: "Travis", datePaid: "2026-08-07", recurrence: "Monthly",  templateId: "rt3" },
-  { id: "ex4", category: "Miscellaneous", description: "Cleaning supplies",    amount: 540,  dueDate: "2026-08-15", status: "Paid",   paidBy: "Split",  datePaid: "2026-08-15", splitPayment: { travis: 270, briana: 270 }, recurrence: "One-time" },
-  { id: "ex5", category: "Insurance",     description: "Homeowners Insurance", amount: 220,  dueDate: "2026-08-25", status: "Unpaid",                                          recurrence: "Monthly",  templateId: "rt4" },
-  { id: "ex6", category: "Miscellaneous", description: "Pool Service",         amount: 95,   dueDate: "2026-08-28", status: "Unpaid",                                          recurrence: "Monthly",  templateId: "rt5" },
-];
+function toExpenseRow(e: Omit<Expense, "id">) {
+  return {
+    category:            e.category,
+    description:         e.description,
+    amount:              e.amount,
+    due_date:            e.dueDate,
+    status:              e.status,
+    paid_by:             e.paidBy ?? null,
+    date_paid:           e.datePaid ?? null,
+    split_payment:       e.splitPayment ?? null,
+    recurrence:          e.recurrence,
+    notes:               e.notes ?? null,
+    template_id:         e.templateId ?? null,
+    vendor_id:           e.vendorId ?? null,
+    maintenance_task_id: e.maintenanceTaskId ?? null,
+    source:              e.source ?? null,
+  };
+}
 
-let _nextExpId = 7;
-let _nextTplId = 6;
+function mapTemplate(r: any): RecurringTemplate {
+  return {
+    id:            r.id,
+    name:          r.name,
+    category:      r.category,
+    defaultAmount: r.default_amount,
+    dueDayOfMonth: r.due_day_of_month,
+    generateMode:  r.generate_mode,
+    active:        r.active,
+  };
+}
+
+function toTemplateRow(t: Omit<RecurringTemplate, "id">) {
+  return {
+    name:             t.name,
+    category:         t.category,
+    default_amount:   t.defaultAmount,
+    due_day_of_month: t.dueDayOfMonth,
+    generate_mode:    t.generateMode,
+    active:           t.active,
+  };
+}
 
 type ExpensesCtx = {
   expenses:           Expense[];
+  loading:            boolean;
   addExpense:         (data: Omit<Expense, "id">) => void;
   updateExpense:      (id: string, data: Partial<Omit<Expense, "id">>) => void;
   removeExpense:      (id: string) => void;
@@ -98,48 +142,81 @@ type ExpensesCtx = {
 const Ctx = createContext<ExpensesCtx | null>(null);
 
 export function ExpensesProvider({ children }: { children: ReactNode }) {
-  const [expenses,           setExpenses]           = useState<Expense[]>(SEED);
+  const [expenses,           setExpenses]           = useState<Expense[]>([]);
   const [customCategories,   setCustomCategories]   = useState<string[]>([]);
-  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(SEED_TEMPLATES);
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>([]);
+  const [loading,            setLoading]            = useState(true);
 
-  // On mount: auto-generate current-month entries for active "automatic" templates
   useEffect(() => {
-    const now = new Date();
-    const year  = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
-    setExpenses(prev => {
-      const toAdd: Expense[] = [];
-      for (const t of SEED_TEMPLATES) {
+    void (async () => {
+      const [{ data: tpls }, { data: exps }, { data: cats }] = await Promise.all([
+        supabase.from("recurring_templates").select("*").order("created_at"),
+        supabase.from("expenses").select("*").order("due_date"),
+        supabase.from("expense_categories").select("name"),
+      ]);
+
+      const templates  = (tpls  || []).map(mapTemplate);
+      let   expenses   = (exps  || []).map(mapExpense);
+      const customCats = (cats  || []).map((c: any) => c.name);
+
+      // Auto-generate current-month entries for active "automatic" templates
+      const now    = new Date();
+      const year   = now.getFullYear();
+      const month  = now.getMonth() + 1;
+      const prefix = `${year}-${String(month).padStart(2, "0")}`;
+
+      const toInsert: any[] = [];
+      for (const t of templates) {
         if (!t.active || t.generateMode !== "automatic") continue;
-        const exists = prev.some(e => e.templateId === t.id && e.dueDate.startsWith(monthPrefix));
-        if (!exists) {
-          toAdd.push({
-            id:          `ex${_nextExpId++}`,
-            category:    t.category,
-            description: t.name,
-            amount:      t.defaultAmount,
-            dueDate:     templateDueDate(t, year, month),
-            status:      "Unpaid",
-            recurrence:  "Monthly",
-            templateId:  t.id,
-          });
-        }
+        if (expenses.some(e => e.templateId === t.id && e.dueDate.startsWith(prefix))) continue;
+        toInsert.push({
+          category:    t.category,
+          description: t.name,
+          amount:      t.defaultAmount,
+          due_date:    templateDueDate(t, year, month),
+          status:      "Unpaid",
+          recurrence:  "Monthly",
+          template_id: t.id,
+        });
       }
-      return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+      if (toInsert.length > 0) {
+        const { data: newRows } = await supabase.from("expenses").insert(toInsert).select();
+        if (newRows) expenses = [...expenses, ...newRows.map(mapExpense)];
+      }
+
+      setRecurringTemplates(templates);
+      setExpenses(expenses);
+      setCustomCategories(customCats);
+      setLoading(false);
+    })();
+  }, []);
 
   function addExpense(data: Omit<Expense, "id">) {
-    setExpenses(e => [...e, { ...data, id: `ex${_nextExpId++}` }]);
+    supabase.from("expenses").insert(toExpenseRow(data)).select().single()
+      .then(({ data: row, error }) => {
+        if (error) { console.error(error); return; }
+        if (row) setExpenses(prev => [...prev, mapExpense(row)]);
+      });
   }
 
   function updateExpense(id: string, data: Partial<Omit<Expense, "id">>) {
-    setExpenses(e => e.map(ex => ex.id === id ? { ...ex, ...data } : ex));
+    const current = expenses.find(e => e.id === id);
+    if (!current) return;
+    const merged = { ...current, ...data };
+    supabase.from("expenses").update(toExpenseRow(merged)).eq("id", id).select().single()
+      .then(({ data: row, error }) => {
+        if (error) { console.error(error); return; }
+        if (row) setExpenses(prev => prev.map(e => e.id === id ? mapExpense(row) : e));
+      });
   }
 
   function removeExpense(id: string) {
-    setExpenses(e => e.filter(ex => ex.id !== id));
+    supabase.from("expenses").delete().eq("id", id)
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+        setExpenses(prev => prev.filter(e => e.id !== id));
+      });
   }
 
   function markPaid(
@@ -148,83 +225,127 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
     datePaid: string,
     splitPayment?: { travis: number; briana: number },
   ) {
-    setExpenses(prev => {
-      const exp = prev.find(e => e.id === id);
-      if (!exp) return prev;
+    void (async () => {
+      const exp = expenses.find(e => e.id === id);
+      if (!exp) return;
 
-      const updated = prev.map(e =>
-        e.id === id
-          ? { ...e, status: "Paid" as ExpenseStatus, paidBy, datePaid, splitPayment: splitPayment ?? undefined }
-          : e
+      const { error } = await supabase.from("expenses").update({
+        status:        "Paid",
+        paid_by:       paidBy,
+        date_paid:     datePaid,
+        split_payment: splitPayment ?? null,
+      }).eq("id", id);
+
+      if (error) { console.error(error); return; }
+
+      setExpenses(prev => prev.map(e =>
+        e.id === id ? { ...e, status: "Paid" as ExpenseStatus, paidBy, datePaid, splitPayment } : e
+      ));
+
+      if (exp.recurrence === "One-time") return;
+
+      const nextDue = advanceDueDate(exp.dueDate, exp.recurrence);
+      const alreadyExists = expenses.some(e =>
+        (exp.templateId ? e.templateId === exp.templateId : e.description === exp.description)
+        && e.dueDate === nextDue
       );
+      if (alreadyExists) return;
 
-      if (exp.recurrence !== "One-time") {
-        const nextDue = advanceDueDate(exp.dueDate, exp.recurrence);
-        const alreadyExists = updated.some(e =>
-          (exp.templateId ? e.templateId === exp.templateId : e.description === exp.description)
-          && e.dueDate === nextDue
-        );
-        if (!alreadyExists) {
-          const { paidBy: _pb, datePaid: _dp, splitPayment: _sp, ...rest } = exp;
-          updated.push({ ...rest, id: `ex${_nextExpId++}`, dueDate: nextDue, status: "Unpaid" });
-        }
-      }
+      const newRow = {
+        category:    exp.category,
+        description: exp.description,
+        amount:      exp.amount,
+        due_date:    nextDue,
+        status:      "Unpaid",
+        recurrence:  exp.recurrence,
+        template_id: exp.templateId ?? null,
+        vendor_id:   exp.vendorId ?? null,
+        notes:       exp.notes ?? null,
+      };
 
-      return updated;
-    });
+      const { data: newExpRow, error: err2 } = await supabase.from("expenses").insert(newRow).select().single();
+      if (err2) { console.error(err2); return; }
+      if (newExpRow) setExpenses(prev => [...prev, mapExpense(newExpRow)]);
+    })();
   }
 
   function addCategory(name: string) {
     const trimmed = name.trim();
     if (!trimmed) return;
-    setCustomCategories(prev => {
-      if (prev.includes(trimmed) || DEFAULT_EXPENSE_CATEGORIES.includes(trimmed)) return prev;
-      return [...prev, trimmed];
-    });
+    if (customCategories.includes(trimmed) || DEFAULT_EXPENSE_CATEGORIES.includes(trimmed)) return;
+    supabase.from("expense_categories").insert({ name: trimmed })
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+        setCustomCategories(prev => [...prev, trimmed]);
+      });
   }
 
   function removeCategory(name: string) {
-    setCustomCategories(prev => prev.filter(c => c !== name));
+    supabase.from("expense_categories").delete().eq("name", name)
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+        setCustomCategories(prev => prev.filter(c => c !== name));
+      });
   }
 
   function addTemplate(data: Omit<RecurringTemplate, "id">) {
-    const id = `rt${_nextTplId++}`;
-    const newTpl: RecurringTemplate = { ...data, id };
-    setRecurringTemplates(prev => [...prev, newTpl]);
+    void (async () => {
+      const { data: row, error } = await supabase
+        .from("recurring_templates").insert(toTemplateRow(data)).select().single();
+      if (error) { console.error(error); return; }
+      if (!row) return;
 
-    // Auto-generate current month only for automatic mode
-    if (data.active && data.generateMode === "automatic") {
-      const now = new Date();
+      const newTpl = mapTemplate(row);
+      setRecurringTemplates(prev => [...prev, newTpl]);
+
+      if (!data.active || data.generateMode !== "automatic") return;
+
+      const now   = new Date();
       const year  = now.getFullYear();
       const month = now.getMonth() + 1;
-      const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
-      setExpenses(prev => {
-        if (prev.some(e => e.templateId === id && e.dueDate.startsWith(monthPrefix))) return prev;
-        return [...prev, {
-          id:          `ex${_nextExpId++}`,
-          category:    data.category,
-          description: data.name,
-          amount:      data.defaultAmount,
-          dueDate:     templateDueDate(newTpl, year, month),
-          status:      "Unpaid",
-          recurrence:  "Monthly",
-          templateId:  id,
-        }];
-      });
-    }
+      const prefix = `${year}-${String(month).padStart(2, "0")}`;
+
+      const { data: existing } = await supabase.from("expenses")
+        .select("id").eq("template_id", newTpl.id).like("due_date", `${prefix}%`);
+      if (existing && existing.length > 0) return;
+
+      const { data: expRow, error: err2 } = await supabase.from("expenses").insert({
+        category:    data.category,
+        description: data.name,
+        amount:      data.defaultAmount,
+        due_date:    templateDueDate(newTpl, year, month),
+        status:      "Unpaid",
+        recurrence:  "Monthly",
+        template_id: newTpl.id,
+      }).select().single();
+
+      if (err2) { console.error(err2); return; }
+      if (expRow) setExpenses(prev => [...prev, mapExpense(expRow)]);
+    })();
   }
 
   function updateTemplate(id: string, data: Partial<Omit<RecurringTemplate, "id">>) {
-    setRecurringTemplates(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+    const current = recurringTemplates.find(t => t.id === id);
+    if (!current) return;
+    const merged = { ...current, ...data };
+    supabase.from("recurring_templates").update(toTemplateRow(merged)).eq("id", id).select().single()
+      .then(({ data: row, error }) => {
+        if (error) { console.error(error); return; }
+        if (row) setRecurringTemplates(prev => prev.map(t => t.id === id ? mapTemplate(row) : t));
+      });
   }
 
   function removeTemplate(id: string) {
-    setRecurringTemplates(prev => prev.filter(t => t.id !== id));
+    supabase.from("recurring_templates").delete().eq("id", id)
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+        setRecurringTemplates(prev => prev.filter(t => t.id !== id));
+      });
   }
 
   return (
     <Ctx.Provider value={{
-      expenses, addExpense, updateExpense, removeExpense, markPaid,
+      expenses, loading, addExpense, updateExpense, removeExpense, markPaid,
       customCategories, addCategory, removeCategory,
       recurringTemplates, addTemplate, updateTemplate, removeTemplate,
     }}>

@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type TaskCategory   = "HVAC" | "Plumbing" | "Pest Control" | "Electrical" | "General" | "Other";
 export type TaskRecurrence = "One-time" | "Monthly" | "Quarterly" | "Semi-annual" | "Annual";
@@ -43,15 +44,42 @@ export function nextDueDate(dueDate: string, recurrence: TaskRecurrence): string
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const SEED: MaintenanceTask[] = [
-  { id: "m1", title: "HVAC filter replacement", category: "HVAC",         dueDate: "2026-07-28", recurrence: "Quarterly",  assignee: "Travis" },
-  { id: "m2", title: "Outdoor shower caulk",    category: "Plumbing",     dueDate: "2026-08-25", recurrence: "One-time",   assignee: "Travis" },
-  { id: "m3", title: "Pest control visit",       category: "Pest Control", dueDate: "2026-08-02", recurrence: "Quarterly",  assignee: "Vendor", vendorId: "v2", manualDone: true, completedDate: "2026-08-02", actualCost: 85 },
-  { id: "m4", title: "Fire pit inspection",      category: "General",      dueDate: "2026-10-01", recurrence: "Annual",     assignee: "Travis" },
-];
+function mapRow(r: any): MaintenanceTask {
+  return {
+    id:            r.id,
+    title:         r.title,
+    category:      r.category,
+    dueDate:       r.due_date,
+    recurrence:    r.recurrence,
+    assignee:      r.assignee ?? undefined,
+    vendorId:      r.vendor_id ?? undefined,
+    cost:          r.cost ?? undefined,
+    notes:         r.notes ?? undefined,
+    manualDone:    r.manual_done ?? false,
+    completedDate: r.completed_date ?? undefined,
+    actualCost:    r.actual_cost ?? undefined,
+  };
+}
+
+function toRow(t: Omit<MaintenanceTask, "id">) {
+  return {
+    title:          t.title,
+    category:       t.category,
+    due_date:       t.dueDate,
+    recurrence:     t.recurrence,
+    assignee:       t.assignee ?? null,
+    vendor_id:      t.vendorId ?? null,
+    cost:           t.cost ?? null,
+    notes:          t.notes ?? null,
+    manual_done:    t.manualDone ?? false,
+    completed_date: t.completedDate ?? null,
+    actual_cost:    t.actualCost ?? null,
+  };
+}
 
 type MaintenanceCtx = {
   tasks: MaintenanceTask[];
+  loading: boolean;
   addTask:      (data: Omit<MaintenanceTask, "id">) => void;
   updateTask:   (id: string, data: Partial<Omit<MaintenanceTask, "id">>) => void;
   removeTask:   (id: string) => void;
@@ -59,45 +87,74 @@ type MaintenanceCtx = {
 };
 
 const Ctx = createContext<MaintenanceCtx | null>(null);
-let _nextId = 5;
 
 export function MaintenanceProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<MaintenanceTask[]>(SEED);
+  const [tasks,   setTasks]   = useState<MaintenanceTask[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from("maintenance").select("*").order("due_date")
+      .then(({ data }) => {
+        if (data) setTasks(data.map(mapRow));
+        setLoading(false);
+      });
+  }, []);
 
   function addTask(data: Omit<MaintenanceTask, "id">) {
-    setTasks(t => [...t, { ...data, id: `m${_nextId++}` }]);
+    supabase.from("maintenance").insert(toRow(data)).select().single()
+      .then(({ data: row, error }) => {
+        if (error) { console.error(error); return; }
+        if (row) setTasks(prev => [...prev, mapRow(row)]);
+      });
   }
 
   function updateTask(id: string, data: Partial<Omit<MaintenanceTask, "id">>) {
-    setTasks(t => t.map(task => task.id === id ? { ...task, ...data } : task));
+    const current = tasks.find(t => t.id === id);
+    if (!current) return;
+    const merged = { ...current, ...data };
+    supabase.from("maintenance").update(toRow(merged)).eq("id", id).select().single()
+      .then(({ data: row, error }) => {
+        if (error) { console.error(error); return; }
+        if (row) setTasks(prev => prev.map(t => t.id === id ? mapRow(row) : t));
+      });
   }
 
   function removeTask(id: string) {
-    setTasks(t => t.filter(task => task.id !== id));
+    supabase.from("maintenance").delete().eq("id", id)
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+        setTasks(prev => prev.filter(t => t.id !== id));
+      });
   }
 
   function completeTask(id: string, completedDate: string, actualCost?: number) {
-    setTasks(prev => {
-      const task = prev.find(t => t.id === id);
-      if (!task) return prev;
-      const next = nextDueDate(task.dueDate, task.recurrence);
-      const updated = prev.map(t =>
-        t.id === id ? { ...t, manualDone: true, completedDate, actualCost } : t
-      );
-      if (!next) return updated;
-      return [...updated, {
-        ...task,
-        id: `m${_nextId++}`,
-        dueDate: next,
-        manualDone: false,
-        completedDate: undefined,
-        actualCost: undefined,
-      }];
-    });
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    supabase.from("maintenance")
+      .update({ manual_done: true, completed_date: completedDate, actual_cost: actualCost ?? null })
+      .eq("id", id)
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+
+        setTasks(prev => prev.map(t =>
+          t.id === id ? { ...t, manualDone: true, completedDate, actualCost } : t
+        ));
+
+        const next = nextDueDate(task.dueDate, task.recurrence);
+        if (!next) return;
+
+        const { id: _id, manualDone: _md, completedDate: _cd, actualCost: _ac, ...rest } = task;
+        supabase.from("maintenance").insert(toRow({ ...rest, dueDate: next, manualDone: false })).select().single()
+          .then(({ data: newRow, error: err2 }) => {
+            if (err2) { console.error(err2); return; }
+            if (newRow) setTasks(prev => [...prev, mapRow(newRow)]);
+          });
+      });
   }
 
   return (
-    <Ctx.Provider value={{ tasks, addTask, updateTask, removeTask, completeTask }}>
+    <Ctx.Provider value={{ tasks, loading, addTask, updateTask, removeTask, completeTask }}>
       {children}
     </Ctx.Provider>
   );

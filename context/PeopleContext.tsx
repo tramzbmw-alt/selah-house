@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type GuestType  = "owner" | "paid";
 export type OwnerAssoc = "Travis" | "Briana" | "Both";
@@ -9,42 +10,83 @@ export type PersonEntry = {
   id: string;
   name: string;
   type: GuestType;
-  // owner guest fields
   relationship?: string;
   owner?: OwnerAssoc;
-  // paid guest fields
-  rate?: number; // per-night rate; undefined = varies / ask each time
+  rate?: number;
 };
 
 type PeopleCtx = {
   people: PersonEntry[];
+  loading: boolean;
   addPerson: (p: Omit<PersonEntry, "id">) => void;
   updatePerson: (id: string, p: Omit<PersonEntry, "id">) => void;
   removePerson: (id: string) => void;
 };
 
+function mapRow(r: any): PersonEntry {
+  return {
+    id:           r.id,
+    name:         r.name,
+    type:         r.type,
+    relationship: r.relationship ?? undefined,
+    owner:        r.owner ?? undefined,
+    rate:         r.rate ?? undefined,
+  };
+}
+
+function toRow(p: Omit<PersonEntry, "id">) {
+  return {
+    name:         p.name,
+    type:         p.type,
+    relationship: p.relationship ?? null,
+    owner:        p.owner ?? null,
+    rate:         p.rate ?? null,
+  };
+}
+
 const Ctx = createContext<PeopleCtx | null>(null);
 
-const SEED: PersonEntry[] = [
-  { id: "pe-1", name: "Mom",   type: "owner", relationship: "Travis's mom",    owner: "Travis" },
-  { id: "pe-2", name: "Dad",   type: "owner", relationship: "Travis's dad",    owner: "Travis" },
-  { id: "pe-3", name: "Sarah", type: "owner", relationship: "Briana's sister", owner: "Briana" },
-  { id: "pe-4", name: "Kyle",  type: "owner", relationship: "Family friend"                    },
-];
-
 export function PeopleProvider({ children }: { children: ReactNode }) {
-  const [people, setPeople] = useState<PersonEntry[]>(SEED);
+  const [people,  setPeople]  = useState<PersonEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addPerson = (p: Omit<PersonEntry, "id">) =>
-    setPeople(prev => [...prev, { ...p, id: crypto.randomUUID() }]);
+  useEffect(() => {
+    supabase.from("people").select("*").order("created_at")
+      .then(({ data }) => {
+        if (data) setPeople(data.map(mapRow));
+        setLoading(false);
+      });
+  }, []);
 
-  const updatePerson = (id: string, p: Omit<PersonEntry, "id">) =>
-    setPeople(prev => prev.map(pe => pe.id === id ? { ...p, id } : pe));
+  function addPerson(p: Omit<PersonEntry, "id">) {
+    supabase.from("people").insert(toRow(p)).select().single()
+      .then(({ data, error }) => {
+        if (error) { console.error(error); return; }
+        if (data) setPeople(prev => [...prev, mapRow(data)]);
+      });
+  }
 
-  const removePerson = (id: string) =>
-    setPeople(prev => prev.filter(p => p.id !== id));
+  function updatePerson(id: string, p: Omit<PersonEntry, "id">) {
+    supabase.from("people").update(toRow(p)).eq("id", id).select().single()
+      .then(({ data, error }) => {
+        if (error) { console.error(error); return; }
+        if (data) setPeople(prev => prev.map(pe => pe.id === id ? mapRow(data) : pe));
+      });
+  }
 
-  return <Ctx.Provider value={{ people, addPerson, updatePerson, removePerson }}>{children}</Ctx.Provider>;
+  function removePerson(id: string) {
+    supabase.from("people").delete().eq("id", id)
+      .then(({ error }) => {
+        if (error) { console.error(error); return; }
+        setPeople(prev => prev.filter(p => p.id !== id));
+      });
+  }
+
+  return (
+    <Ctx.Provider value={{ people, loading, addPerson, updatePerson, removePerson }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function usePeople() {
