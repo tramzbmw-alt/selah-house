@@ -38,7 +38,7 @@ function fmtAmt(n: number) {
 
 export default function StatsRow() {
   const { stays }              = useStays();
-  const { entries, stayPayments } = useRevenue();
+  const { entries }             = useRevenue();
   const { tasks }              = useMaintenance();
   const { expenses }           = useExpenses();
   const upcoming               = getUpcomingStays(stays);
@@ -53,28 +53,21 @@ export default function StatsRow() {
     return d.getFullYear() === cy && d.getMonth() + 1 === cm;
   };
 
-  // Monthly Revenue: paid stay-derived + paid manual entries with checkIn in current month
-  const stayRevenue = stays
-    .filter(s => s.cost > 0 && inCurrMonth(s.startDate) && stayPayments[s.id]?.paymentStatus === "Paid")
-    .reduce((sum, s) => sum + s.cost, 0);
-
-  const manualRevenue = entries
+  // Monthly Revenue: revenue table entries only (revenue → calendar, not the other way)
+  const monthRevenue = entries
     .filter(e => e.paymentStatus === "Paid" && inCurrMonth(e.checkIn))
     .reduce((sum, e) => sum + e.totalAmount, 0);
 
-  const monthRevenue     = stayRevenue + manualRevenue;
-  const revValue         = fmtAmt(monthRevenue);
-  const revLabel         = `${MONTHS_SHORT[now.getMonth()]} Revenue`;
-  const totalStays       = stays.filter(s => s.cost > 0 && inCurrMonth(s.startDate)).length
-                         + entries.filter(e => inCurrMonth(e.checkIn)).length;
-  const paidStays        = stays.filter(s => s.cost > 0 && inCurrMonth(s.startDate) && stayPayments[s.id]?.paymentStatus === "Paid").length
-                         + entries.filter(e => e.paymentStatus === "Paid" && inCurrMonth(e.checkIn)).length;
-  const revSub           = totalStays === 0 ? "no stays this month"
-                         : paidStays === totalStays ? "all paid"
-                         : `${paidStays} of ${totalStays} paid`;
-  const revDot           = totalStays === 0 ? "gray"
-                         : paidStays === totalStays ? "teal"
-                         : paidStays > 0 ? "paid" : "gray";
+  const revValue   = fmtAmt(monthRevenue);
+  const revLabel   = `${MONTHS_SHORT[now.getMonth()]} Revenue`;
+  const totalStays = entries.filter(e => inCurrMonth(e.checkIn)).length;
+  const paidStays  = entries.filter(e => e.paymentStatus === "Paid" && inCurrMonth(e.checkIn)).length;
+  const revSub     = totalStays === 0 ? "no stays this month"
+                   : paidStays === totalStays ? "all paid"
+                   : `${paidStays} of ${totalStays} paid`;
+  const revDot     = totalStays === 0 ? "gray"
+                   : paidStays === totalStays ? "teal"
+                   : paidStays > 0 ? "paid" : "gray";
 
   // Unpaid Bills: unpaid expenses for current month
   const monthExpenses   = expenses.filter(e => inCurrMonth(e.dueDate));

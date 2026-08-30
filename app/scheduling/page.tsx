@@ -5,6 +5,7 @@ import { IconCalendarEvent, IconChevronLeft, IconChevronRight, IconTrash, IconX 
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { useStays, type StayPerson, type Stay } from "@/context/StaysContext";
+import { useRevenue } from "@/context/RevenueContext";
 import { usePeople, type PersonEntry } from "@/context/PeopleContext";
 import { useMaintenance, deriveStatus, type TaskStatus } from "@/context/MaintenanceContext";
 import { getOccupied, getUpcomingStays, MONTHS, DOW, TRAVIS, BRIANA, BOTH, PAID, stayColors, personColors, formatStayRange, formatShortDate } from "@/lib/stayUtils";
@@ -28,6 +29,7 @@ type ModalState = { day: number; existing?: Stay; editing?: boolean };
 
 export default function SchedulingPage() {
   const { stays, addStay, updateStay, removeStay } = useStays();
+  const { removeEntry } = useRevenue();
   const { people } = usePeople();
   const { tasks }  = useMaintenance();
 
@@ -49,7 +51,8 @@ export default function SchedulingPage() {
     return map;
   }, [tasks, viewYear, viewMonth]);
 
-  const [modal,     setModal]     = useState<ModalState | null>(null);
+  const [modal,              setModal]              = useState<ModalState | null>(null);
+  const [confirmLinkedDelete, setConfirmLinkedDelete] = useState<Stay | null>(null);
   const [person,    setPerson]    = useState<StayPerson>("Travis");
   const [nights,    setNights]    = useState(1);
   const [guest,     setGuest]     = useState("");
@@ -280,7 +283,7 @@ export default function SchedulingPage() {
                           style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#9e9b93" }}
                           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(185,50,40,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#b93228"; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "#9e9b93"; }}
-                          onClick={() => removeStay(s.id)}
+                          onClick={() => s.revenueId ? setConfirmLinkedDelete(s) : removeStay(s.id)}
                         >
                           <IconTrash size={13} strokeWidth={2} />
                         </button>
@@ -310,7 +313,7 @@ export default function SchedulingPage() {
                           style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#9e9b93" }}
                           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(185,50,40,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "#b93228"; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = "#9e9b93"; }}
-                          onClick={() => removeStay(s.id)}
+                          onClick={() => s.revenueId ? setConfirmLinkedDelete(s) : removeStay(s.id)}
                         >
                           <IconTrash size={13} strokeWidth={2} />
                         </button>
@@ -329,6 +332,42 @@ export default function SchedulingPage() {
           </div>
         </main>
       </div>
+
+      {/* Linked-delete confirmation dialog */}
+      {confirmLinkedDelete && (
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.38)", zIndex: 60 }}
+        >
+          <div className="bg-white rounded-2xl" style={{ width: 340, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            <div className="text-[15px] font-semibold mb-2" style={{ color: "#1c1c1a" }}>Remove stay?</div>
+            <div className="text-[13px] mb-6" style={{ color: "#6b6960", lineHeight: 1.5 }}>
+              This stay is linked to a revenue entry for{" "}
+              <span style={{ color: "#1c1c1a", fontWeight: 600 }}>{confirmLinkedDelete.guest || "this guest"}</span>.
+              Deleting it will also remove the revenue record. Continue?
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                style={{ background: "#f4f3f0", color: "#6b6960", border: "none", cursor: "pointer" }}
+                onClick={() => setConfirmLinkedDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                style={{ background: "rgba(185,50,40,0.1)", color: "#b93228", border: "none", cursor: "pointer" }}
+                onClick={() => {
+                  removeEntry(confirmLinkedDelete.revenueId!);
+                  setConfirmLinkedDelete(null);
+                }}
+              >
+                Remove both
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {modal && (
@@ -371,7 +410,7 @@ export default function SchedulingPage() {
                 </div>
                 {isRevManaged && (
                   <div className="mb-3 text-[11px] rounded-lg px-3 py-2" style={{ background: "rgba(201,168,76,0.1)", color: "#7a5e10" }}>
-                    Managed via Revenue — edit or remove from the Revenue page.
+                    Managed via Revenue — edit from the Revenue page.
                   </div>
                 )}
                 {!isRevManaged && (
@@ -391,15 +430,20 @@ export default function SchedulingPage() {
                   >
                     Close
                   </button>
-                  {!isRevManaged && (
-                    <button
-                      className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
-                      style={{ background: "rgba(185,50,40,0.1)", color: "#b93228", border: "none", cursor: "pointer" }}
-                      onClick={handleRemove}
-                    >
-                      Remove
-                    </button>
-                  )}
+                  <button
+                    className="flex-1 py-2.5 rounded-xl text-[13px] font-medium"
+                    style={{ background: "rgba(185,50,40,0.1)", color: "#b93228", border: "none", cursor: "pointer" }}
+                    onClick={() => {
+                      if (isRevManaged) {
+                        setConfirmLinkedDelete(modal!.existing!);
+                        setModal(null);
+                      } else {
+                        handleRemove();
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
                 </div>
               </>
             ) : (

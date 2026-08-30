@@ -3,8 +3,7 @@
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
-import { useRevenue, PAYMENT_STATUSES, PAYMENT_METHODS, type RevenueEntry, type PaymentStatus, type PaymentMethod, type StayPaymentInfo } from "@/context/RevenueContext";
-import { useStays } from "@/context/StaysContext";
+import { useRevenue, PAYMENT_STATUSES, PAYMENT_METHODS, type RevenueEntry, type PaymentStatus, type PaymentMethod } from "@/context/RevenueContext";
 import { MONTHS_SHORT } from "@/lib/stayUtils";
 import {
   IconPlus,
@@ -34,22 +33,6 @@ const STATUS_COLORS: Record<PaymentStatus, { bg: string; text: string; border: s
   Refunded: { bg: "rgba(158,155,147,0.12)", text: "#5c5a55", border: "rgba(158,155,147,0.3)" },
 };
 
-type UnifiedEntry = {
-  key:        string;
-  source:     "stay" | "manual";
-  stayId?:    string;
-  manualId?:  string;
-  guestName:  string;
-  checkIn:    string;
-  checkOut:   string;
-  nights:     number;
-  nightlyRate: number;
-  totalAmount: number;
-  paymentStatus: PaymentStatus;
-  paymentMethod: PaymentMethod;
-  notes?:     string;
-};
-
 type FilterMode = "month" | "range";
 type TabFilter  = "All" | "Pending" | "Paid" | "Refunded";
 
@@ -66,8 +49,7 @@ const EMPTY_FORM = {
 };
 
 export default function RevenuePage() {
-  const { entries, addEntry, updateEntry, removeEntry, stayPayments, updateStayPayment } = useRevenue();
-  const { stays } = useStays();
+  const { entries, addEntry, updateEntry, removeEntry } = useRevenue();
 
   const now = new Date();
   const [filterMode, setFilterMode]   = useState<FilterMode>("month");
@@ -78,60 +60,15 @@ export default function RevenuePage() {
   const [tab, setTab]                 = useState<TabFilter>("All");
 
   // Modal state
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [editEntry,  setEditEntry]  = useState<UnifiedEntry | null>(null);
-  const [deleteKey,  setDeleteKey]  = useState<string | null>(null);
-  const [form,       setForm]       = useState({ ...EMPTY_FORM });
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [editEntry, setEditEntry] = useState<RevenueEntry | null>(null);
+  const [deleteId,  setDeleteId]  = useState<string | null>(null);
+  const [form,      setForm]      = useState({ ...EMPTY_FORM });
 
-  // Build unified list
-  const stayEntries: UnifiedEntry[] = stays
-    .filter(s => s.cost > 0)
-    .map(s => {
-      const payment = stayPayments[s.id] ?? { paymentStatus: "Pending" as PaymentStatus, paymentMethod: "Cash" as PaymentMethod };
-      const checkOut = (() => {
-        const d = parseLocalDate(s.startDate);
-        d.setDate(d.getDate() + s.nights);
-        return d.toISOString().split("T")[0];
-      })();
-      const nights = s.nights;
-      const nightlyRate = Math.round(s.cost / nights);
-      return {
-        key:           s.id,
-        source:        "stay" as const,
-        stayId:        s.id,
-        guestName:     s.guest || "Paid Guest",
-        checkIn:       s.startDate,
-        checkOut,
-        nights,
-        nightlyRate,
-        totalAmount:   s.cost,
-        paymentStatus: payment.paymentStatus,
-        paymentMethod: payment.paymentMethod,
-        notes:         payment.notes,
-      };
-    });
-
-  const manualEntries: UnifiedEntry[] = entries.map(e => ({
-    key:           e.id,
-    source:        "manual" as const,
-    manualId:      e.id,
-    guestName:     e.guestName,
-    checkIn:       e.checkIn,
-    checkOut:      e.checkOut,
-    nights:        e.nights,
-    nightlyRate:   e.nightlyRate,
-    totalAmount:   e.totalAmount,
-    paymentStatus: e.paymentStatus,
-    paymentMethod: e.paymentMethod,
-    notes:         e.notes,
-  }));
-
-  const allEntries: UnifiedEntry[] = [...stayEntries, ...manualEntries].sort(
-    (a, b) => b.checkIn.localeCompare(a.checkIn)
-  );
+  const allEntries = [...entries].sort((a, b) => b.checkIn.localeCompare(a.checkIn));
 
   // Period filter
-  function inPeriod(e: UnifiedEntry) {
+  function inPeriod(e: RevenueEntry) {
     if (filterMode === "month") {
       const d = parseLocalDate(e.checkIn);
       return d.getFullYear() === filterYear && d.getMonth() + 1 === filterMonth;
@@ -146,15 +83,13 @@ export default function RevenuePage() {
   // Summary stats
   const paidRevenue    = periodEntries.filter(e => e.paymentStatus === "Paid").reduce((s, e) => s + e.totalAmount, 0);
   const pendingRevenue = periodEntries.filter(e => e.paymentStatus === "Pending").reduce((s, e) => s + e.totalAmount, 0);
-
-  const ytdRevenue = allEntries
+  const ytdRevenue     = allEntries
     .filter(e => {
       const d = parseLocalDate(e.checkIn);
       return d.getFullYear() === now.getFullYear() && e.paymentStatus === "Paid";
     })
     .reduce((s, e) => s + e.totalAmount, 0);
 
-  // Tab counts
   const tabCount = (t: TabFilter) =>
     t === "All" ? periodEntries.length : periodEntries.filter(e => e.paymentStatus === t).length;
 
@@ -175,7 +110,7 @@ export default function RevenuePage() {
     setForm({ ...EMPTY_FORM });
     setShowAdd(true);
   }
-  function openEdit(e: UnifiedEntry) {
+  function openEdit(e: RevenueEntry) {
     setForm({
       guestName:     e.guestName,
       checkIn:       e.checkIn,
@@ -192,7 +127,7 @@ export default function RevenuePage() {
   function closeModals() {
     setShowAdd(false);
     setEditEntry(null);
-    setDeleteKey(null);
+    setDeleteId(null);
   }
 
   function recalcTotal(nights: number, rate: number) {
@@ -208,7 +143,6 @@ export default function RevenuePage() {
           field === "nightlyRate" ? Number(value) : prev.nightlyRate
         );
       }
-      // Auto-compute checkout from checkIn + nights
       if (field === "checkIn" || field === "nights") {
         const ci = field === "checkIn" ? String(value) : prev.checkIn;
         const n  = field === "nights" ? Number(value) : prev.nights;
@@ -240,39 +174,25 @@ export default function RevenuePage() {
 
   function saveEdit() {
     if (!editEntry) return;
-    if (editEntry.source === "manual" && editEntry.manualId) {
-      updateEntry(editEntry.manualId, {
-        guestName:     form.guestName,
-        checkIn:       form.checkIn,
-        checkOut:      form.checkOut,
-        nights:        form.nights,
-        nightlyRate:   form.nightlyRate,
-        totalAmount:   form.totalAmount,
-        paymentStatus: form.paymentStatus,
-        paymentMethod: form.paymentMethod,
-        notes:         form.notes || undefined,
-      });
-    } else if (editEntry.source === "stay" && editEntry.stayId) {
-      // For stay-derived: only update payment info
-      updateStayPayment(editEntry.stayId, {
-        paymentStatus: form.paymentStatus,
-        paymentMethod: form.paymentMethod,
-        notes:         form.notes || undefined,
-      });
-    }
+    updateEntry(editEntry.id, {
+      guestName:     form.guestName,
+      checkIn:       form.checkIn,
+      checkOut:      form.checkOut,
+      nights:        form.nights,
+      nightlyRate:   form.nightlyRate,
+      totalAmount:   form.totalAmount,
+      paymentStatus: form.paymentStatus,
+      paymentMethod: form.paymentMethod,
+      notes:         form.notes || undefined,
+    });
     closeModals();
   }
 
   function confirmDelete() {
-    if (!deleteKey) return;
-    const entry = allEntries.find(e => e.key === deleteKey);
-    if (entry?.source === "manual" && entry.manualId) {
-      removeEntry(entry.manualId);
-    }
+    if (!deleteId) return;
+    removeEntry(deleteId);
     closeModals();
   }
-
-  const isStayEdit = editEntry?.source === "stay";
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -450,7 +370,7 @@ export default function RevenuePage() {
                 const sc = STATUS_COLORS[entry.paymentStatus];
                 return (
                   <div
-                    key={entry.key}
+                    key={entry.id}
                     className="bg-white rounded-xl flex items-center gap-4"
                     style={{ border: "1px solid #e4e2dc", padding: "14px 18px" }}
                   >
@@ -467,18 +387,8 @@ export default function RevenuePage() {
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[14px] font-medium truncate" style={{ color: "#1c1c1a" }}>
-                          {entry.guestName}
-                        </span>
-                        {entry.source === "stay" && (
-                          <span
-                            className="text-[10px] font-medium rounded px-1.5"
-                            style={{ background: "rgba(59,158,149,0.1)", color: "#1f7068", border: "1px solid rgba(59,158,149,0.2)" }}
-                          >
-                            From Calendar
-                          </span>
-                        )}
+                      <div className="text-[14px] font-medium truncate mb-0.5" style={{ color: "#1c1c1a" }}>
+                        {entry.guestName}
                       </div>
                       <div className="text-[12px]" style={{ color: "#9e9b93" }}>
                         {fmtDate(entry.checkIn)} – {fmtDate(entry.checkOut)} · {entry.nights} night{entry.nights !== 1 ? "s" : ""} · {fmtAmt(entry.nightlyRate)}/night
@@ -514,17 +424,15 @@ export default function RevenuePage() {
                       >
                         <IconEdit size={13} strokeWidth={1.75} />
                       </button>
-                      {entry.source === "manual" && (
-                        <button
-                          onClick={() => setDeleteKey(entry.key)}
-                          className="flex items-center justify-center rounded-lg transition-colors"
-                          style={{ width: 30, height: 30, background: "transparent", border: "1px solid #e4e2dc", cursor: "pointer", color: "#9e9b93" }}
-                          onMouseEnter={e => { e.currentTarget.style.background = "rgba(185,50,40,0.06)"; e.currentTarget.style.color = "#b93228"; e.currentTarget.style.borderColor = "rgba(185,50,40,0.2)"; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#9e9b93"; e.currentTarget.style.borderColor = "#e4e2dc"; }}
-                        >
-                          <IconTrash size={13} strokeWidth={1.75} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setDeleteId(entry.id)}
+                        className="flex items-center justify-center rounded-lg transition-colors"
+                        style={{ width: 30, height: 30, background: "transparent", border: "1px solid #e4e2dc", cursor: "pointer", color: "#9e9b93" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "rgba(185,50,40,0.06)"; e.currentTarget.style.color = "#b93228"; e.currentTarget.style.borderColor = "rgba(185,50,40,0.2)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#9e9b93"; e.currentTarget.style.borderColor = "#e4e2dc"; }}
+                      >
+                        <IconTrash size={13} strokeWidth={1.75} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -546,9 +454,9 @@ export default function RevenuePage() {
             style={{ background: "#fff", width: 480, maxHeight: "85vh", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}
           >
             {/* Modal header */}
-            <div className="flex items-center justify-between" style={{ borderBottom: "1px solid #e4e2dc", paddingLeft: "24px", paddingRight: "24px", paddingTop: "20px", paddingBottom: "20px" }}>
+            <div className="flex items-center justify-between" style={{ borderBottom: "1px solid #e4e2dc", padding: "20px 24px" }}>
               <h2 className="text-[15px] font-semibold" style={{ color: "#1c1c1a" }}>
-                {showAdd ? "Add Revenue Entry" : isStayEdit ? "Edit Payment Details" : "Edit Entry"}
+                {showAdd ? "Add Revenue Entry" : "Edit Entry"}
               </h2>
               <button onClick={closeModals} style={{ background: "none", border: "none", cursor: "pointer", color: "#9e9b93" }}>
                 <IconX size={18} />
@@ -557,68 +465,58 @@ export default function RevenuePage() {
 
             {/* Modal body */}
             <div className="flex flex-col gap-4 overflow-y-auto" style={{ padding: "24px" }}>
-              {isStayEdit && (
-                <div className="rounded-lg px-3 py-2 text-[12px]" style={{ background: "rgba(59,158,149,0.08)", color: "#1f7068", border: "1px solid rgba(59,158,149,0.2)" }}>
-                  This entry is derived from the calendar. Only payment details can be edited here.
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Guest Name</label>
+                <input
+                  value={form.guestName}
+                  onChange={e => handleFormChange("guestName", e.target.value)}
+                  placeholder="e.g. The Johnson Family"
+                  className="rounded-lg px-3 text-[13px]"
+                  style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Check-In</label>
+                  <input
+                    type="date" value={form.checkIn}
+                    onChange={e => handleFormChange("checkIn", e.target.value)}
+                    className="rounded-lg px-3 text-[13px]"
+                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
+                  />
                 </div>
-              )}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Nights</label>
+                  <input
+                    type="number" min={1} value={form.nights}
+                    onChange={e => handleFormChange("nights", parseInt(e.target.value) || 1)}
+                    className="rounded-lg px-3 text-[13px]"
+                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
+                  />
+                </div>
+              </div>
 
-              {!isStayEdit && (
-                <>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Guest Name</label>
-                    <input
-                      value={form.guestName}
-                      onChange={e => handleFormChange("guestName", e.target.value)}
-                      placeholder="e.g. The Johnson Family"
-                      className="rounded-lg px-3 text-[13px]"
-                      style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Check-In</label>
-                      <input
-                        type="date" value={form.checkIn}
-                        onChange={e => handleFormChange("checkIn", e.target.value)}
-                        className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Nights</label>
-                      <input
-                        type="number" min={1} value={form.nights}
-                        onChange={e => handleFormChange("nights", parseInt(e.target.value) || 1)}
-                        className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Nightly Rate ($)</label>
-                      <input
-                        type="number" min={0} value={form.nightlyRate}
-                        onChange={e => handleFormChange("nightlyRate", parseFloat(e.target.value) || 0)}
-                        className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Total ($)</label>
-                      <input
-                        type="number" min={0} value={form.totalAmount}
-                        onChange={e => handleFormChange("totalAmount", parseFloat(e.target.value) || 0)}
-                        className="rounded-lg px-3 text-[13px]"
-                        style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Nightly Rate ($)</label>
+                  <input
+                    type="number" min={0} value={form.nightlyRate}
+                    onChange={e => handleFormChange("nightlyRate", parseFloat(e.target.value) || 0)}
+                    className="rounded-lg px-3 text-[13px]"
+                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "#9e9b93" }}>Total ($)</label>
+                  <input
+                    type="number" min={0} value={form.totalAmount}
+                    onChange={e => handleFormChange("totalAmount", parseFloat(e.target.value) || 0)}
+                    className="rounded-lg px-3 text-[13px]"
+                    style={{ height: 38, border: "1px solid #e4e2dc", background: "#fafaf9", color: "#1c1c1a", outline: "none", paddingLeft: "12px" }}
+                  />
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -659,7 +557,7 @@ export default function RevenuePage() {
             </div>
 
             {/* Modal footer */}
-            <div className="flex justify-end gap-2" style={{ borderTop: "1px solid #e4e2dc", paddingRight: "24px", paddingBottom: "20px", paddingTop: "16px" }}>
+            <div className="flex justify-end gap-2" style={{ borderTop: "1px solid #e4e2dc", padding: "16px 24px 20px" }}>
               <button
                 onClick={closeModals}
                 className="rounded-lg px-4 text-[13px] transition-colors"
@@ -685,7 +583,7 @@ export default function RevenuePage() {
       )}
 
       {/* Delete Confirm Modal */}
-      {deleteKey && (
+      {deleteId && (
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{ background: "rgba(0,0,0,0.35)", zIndex: 50 }}
@@ -694,7 +592,7 @@ export default function RevenuePage() {
           <div className="rounded-2xl" style={{ background: "#fff", width: 360, padding: "28px", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}>
             <h2 className="text-[15px] font-semibold mb-2" style={{ color: "#1c1c1a" }}>Delete entry?</h2>
             <p className="text-[13px] mb-6" style={{ color: "#9e9b93" }}>
-              This will permanently remove this revenue entry.
+              This will permanently remove this revenue entry and its linked calendar stay.
             </p>
             <div className="flex justify-end gap-2">
               <button
