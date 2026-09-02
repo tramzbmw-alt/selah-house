@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   IconHome2,
   IconCalendar,
@@ -44,6 +46,18 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    function load() {
+      supabase.from("booking_requests").select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+        .then(({ count }) => { if (count !== null) setPendingCount(count); });
+    }
+    load();
+    const interval = setInterval(load, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <aside
@@ -120,7 +134,25 @@ export default function Sidebar() {
                   }}
                 >
                   <Icon size={15} strokeWidth={1.75} />
-                  {label}
+                  <span className="flex-1">{label}</span>
+                  {label === "Booking Requests" && pendingCount > 0 && (
+                    <span style={{
+                      background: "#c08040",
+                      color: "#fff",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      borderRadius: 100,
+                      minWidth: 16,
+                      height: 16,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0 4px",
+                      lineHeight: 1,
+                    }}>
+                      {pendingCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
