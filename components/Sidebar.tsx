@@ -12,6 +12,7 @@ import {
   IconAddressBook,
   IconUsers,
   IconSettings,
+  IconInbox,
 } from "@tabler/icons-react";
 
 const NAV = [
@@ -35,7 +36,8 @@ const NAV = [
   {
     section: "Guests",
     items: [
-      { icon: IconUsers, label: "People", href: "/people" },
+      { icon: IconInbox, label: "Booking Requests", href: "/booking-requests" },
+      { icon: IconUsers, label: "People",           href: "/people"           },
     ],
   },
 ];
