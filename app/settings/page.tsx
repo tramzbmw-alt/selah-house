@@ -53,8 +53,7 @@ export default function SettingsPage() {
     setErrors(e  => ({ ...e,  [key]: ""    }));
     const { error } = await supabase
       .from("settings")
-      .update({ value: values[key], updated_at: new Date().toISOString() })
-      .eq("key", key);
+      .upsert({ key, value: values[key], updated_at: new Date().toISOString() }, { onConflict: "key" });
     setSaving(s => ({ ...s, [key]: false }));
     if (error) {
       setErrors(e => ({ ...e, [key]: error.message }));
