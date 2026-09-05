@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { supabase } from "@/lib/supabase";
-import { IconInbox, IconCheck, IconX, IconCurrencyDollar, IconMail, IconPhone } from "@tabler/icons-react";
+import { IconInbox, IconCheck, IconX, IconTrash, IconCurrencyDollar, IconMail, IconPhone } from "@tabler/icons-react";
+import { revenueEvents } from "@/lib/revenueEvents";
 
 type RateSegment = {
   startDate: string;
@@ -77,6 +78,7 @@ export default function BookingRequestsPage() {
   const [rateModal,    setRateModal]    = useState<BookingRequest | null>(null);
   const [rateInput,    setRateInput]    = useState("");
   const [totalInput,   setTotalInput]   = useState("");
+  const [cancelModal,  setCancelModal]  = useState<BookingRequest | null>(null);
   const [depositModal, setDepositModal] = useState<BookingRequest | null>(null);
   const [depositMethod, setDepositMethod] = useState("Zelle");
   const [depositPct,   setDepositPct]   = useState(30);
@@ -145,8 +147,25 @@ export default function BookingRequestsPage() {
       revenue_id:   revRow.id,
     }).eq("id", req.id);
 
+    revenueEvents.refresh();
     setActionId(null);
     setRateModal(null);
+    load();
+  }
+
+  async function cancelRequest(req: BookingRequest) {
+    setActionId(req.id);
+    if (req.revenueId) {
+      // Delete linked calendar stay first, then revenue entry
+      const { error: stayDelErr } = await supabase.from("stays").delete().eq("revenue_id", req.revenueId);
+      if (stayDelErr) console.error("[cancel] stay delete error:", stayDelErr);
+      const { error: revDelErr } = await supabase.from("revenue").delete().eq("id", req.revenueId);
+      if (revDelErr) console.error("[cancel] revenue delete error:", revDelErr);
+      revenueEvents.refresh();
+    }
+    await supabase.from("booking_requests").delete().eq("id", req.id);
+    setActionId(null);
+    setCancelModal(null);
     load();
   }
 
@@ -318,6 +337,16 @@ export default function BookingRequestsPage() {
 
                       {/* Right: Actions */}
                       <div className="flex flex-col gap-2 flex-shrink-0" style={{ minWidth: 160 }}>
+                        {/* Cancel / Delete — always visible */}
+                        <button
+                          onClick={() => req.status === "approved" ? setCancelModal(req) : cancelRequest(req)}
+                          disabled={busy}
+                          style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "center", background: "rgba(185,50,40,0.07)", color: "#b93228", border: "1px solid rgba(185,50,40,0.18)", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 500, cursor: busy ? "default" : "pointer", marginBottom: 2 }}
+                        >
+                          <IconTrash size={12} />
+                          {req.status === "approved" ? "Cancel booking" : "Delete"}
+                        </button>
+
                         {req.status === "pending" && (
                           <>
                             <button
@@ -487,6 +516,26 @@ export default function BookingRequestsPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Cancel booking confirmation modal */}
+      {cancelModal && (
+        <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
+          onClick={e => { if (e.target === e.currentTarget) setCancelModal(null); }}>
+          <div className="bg-white rounded-2xl" style={{ width: 380, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1c1c1a", marginBottom: 8 }}>Cancel booking?</div>
+            <div style={{ fontSize: 13, color: "#6b6960", marginBottom: 8, lineHeight: 1.6 }}>
+              <strong style={{ color: "#1c1c1a" }}>{cancelModal.guestName}</strong> · {fmtDate(cancelModal.checkIn)} → {fmtDate(cancelModal.checkOut)}
+            </div>
+            <div style={{ fontSize: 13, color: "#b93228", background: "rgba(185,50,40,0.07)", borderRadius: 8, padding: "10px 14px", marginBottom: 24, lineHeight: 1.6 }}>
+              Cancelling this booking will also remove the linked calendar stay and revenue entry. This cannot be undone.
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setCancelModal(null)} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Keep booking</button>
+              <button onClick={() => cancelRequest(cancelModal)} style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: "#b93228", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Cancel booking</button>
+            </div>
           </div>
         </div>
       )}

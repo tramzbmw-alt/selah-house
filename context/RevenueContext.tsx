@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import { stayEvents } from "@/lib/stayEvents";
+import { revenueEvents } from "@/lib/revenueEvents";
 import { peopleEvents } from "@/lib/peopleEvents";
 
 export type PaymentStatus  = "Pending" | "Paid" | "Refunded";
@@ -80,13 +81,20 @@ export function RevenueProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<RevenueEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadEntries = useCallback(() => {
     supabase.from("revenue").select("*").order("check_in")
       .then(({ data }) => {
         if (data) setEntries(data.map(mapEntry));
         setLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    loadEntries();
+    // Re-fetch when booking-requests page creates revenue entries externally
+    const unsub = revenueEvents.onRefresh(loadEntries);
+    return unsub;
+  }, [loadEntries]);
 
   function addEntry(data: Omit<RevenueEntry, "id">) {
     void (async () => {
