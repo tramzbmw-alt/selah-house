@@ -104,7 +104,7 @@ export default function BookingRequestsPage() {
     if (revErr) { console.error(revErr); setActionId(null); return; }
 
     // Create gold calendar stay linked to revenue
-    await supabase.from("stays").insert({
+    const { error: stayErr } = await supabase.from("stays").insert({
       person:         null,
       guest:          req.guestName,
       start_date:     req.checkIn,
@@ -112,8 +112,10 @@ export default function BookingRequestsPage() {
       cost:           total,
       payment_status: "Pending",
       payment_method: "Cash",
+      payment_notes:  null,
       revenue_id:     revRow.id,
     });
+    if (stayErr) { console.error("[approve] stays insert error:", stayErr); setActionId(null); return; }
 
     // Update booking request
     await supabase.from("booking_requests").update({

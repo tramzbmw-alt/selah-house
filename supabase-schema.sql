@@ -82,6 +82,7 @@ CREATE TABLE stays (
   payment_status text,
   payment_method text,
   payment_notes  text,
+  revenue_id     uuid REFERENCES revenue(id) ON DELETE SET NULL,
   created_at     timestamptz NOT NULL DEFAULT now()
 );
 
