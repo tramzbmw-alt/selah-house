@@ -158,21 +158,23 @@ ALTER TABLE document_categories DISABLE ROW LEVEL SECURITY;
 -- Booking Requests (from public website)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS booking_requests (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  guest_name    text NOT NULL,
-  email         text NOT NULL,
-  phone         text,
-  check_in      date NOT NULL,
-  check_out     date NOT NULL,
-  nights        integer NOT NULL,
-  guest_count   integer NOT NULL DEFAULT 2,
-  message       text,
-  source        text,
-  status        text NOT NULL DEFAULT 'pending',  -- pending | approved | declined
-  nightly_rate  numeric,
-  deposit_paid  boolean NOT NULL DEFAULT false,
-  balance_paid  boolean NOT NULL DEFAULT false,
-  revenue_id    uuid REFERENCES revenue(id) ON DELETE SET NULL,
-  created_at    timestamptz NOT NULL DEFAULT now()
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  guest_name     text NOT NULL,
+  email          text NOT NULL,
+  phone          text,
+  check_in       date NOT NULL,
+  check_out      date NOT NULL,
+  nights         integer NOT NULL,
+  guest_count    integer NOT NULL DEFAULT 2,
+  message        text,
+  source         text,
+  status         text NOT NULL DEFAULT 'pending',  -- pending | approved | declined
+  nightly_rate   numeric,
+  rate_breakdown jsonb,                             -- seasonal rate segments from booking form
+  total_amount   numeric NOT NULL DEFAULT 0,        -- quoted total from booking form
+  deposit_paid   boolean NOT NULL DEFAULT false,
+  balance_paid   boolean NOT NULL DEFAULT false,
+  revenue_id     uuid REFERENCES revenue(id) ON DELETE SET NULL,
+  created_at     timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE booking_requests DISABLE ROW LEVEL SECURITY;

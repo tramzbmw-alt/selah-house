@@ -6,23 +6,34 @@ import Topbar from "@/components/Topbar";
 import { supabase } from "@/lib/supabase";
 import { IconInbox, IconCheck, IconX, IconCurrencyDollar, IconMail, IconPhone } from "@tabler/icons-react";
 
+type RateSegment = {
+  startDate: string;
+  endDate:   string;
+  nights:    number;
+  rate:      number;
+  rateName:  string;
+  subtotal:  number;
+};
+
 type BookingRequest = {
-  id:           string;
-  guestName:    string;
-  email:        string;
-  phone?:       string;
-  checkIn:      string;
-  checkOut:     string;
-  nights:       number;
-  guestCount:   number;
-  message?:     string;
-  source?:      string;
-  status:       "pending" | "approved" | "declined";
-  nightlyRate?: number;
-  depositPaid:  boolean;
-  balancePaid:  boolean;
-  revenueId?:   string;
-  createdAt:    string;
+  id:             string;
+  guestName:      string;
+  email:          string;
+  phone?:         string;
+  checkIn:        string;
+  checkOut:       string;
+  nights:         number;
+  guestCount:     number;
+  message?:       string;
+  source?:        string;
+  status:         "pending" | "approved" | "declined";
+  nightlyRate?:   number;
+  rateBreakdown?: RateSegment[];
+  quotedTotal:    number;
+  depositPaid:    boolean;
+  balancePaid:    boolean;
+  revenueId?:     string;
+  createdAt:      string;
 };
 
 type TabFilter = "pending" | "approved" | "declined";
@@ -37,22 +48,24 @@ function fmtDate(d: string) {
 
 function mapRow(r: any): BookingRequest {
   return {
-    id:          r.id,
-    guestName:   r.guest_name,
-    email:       r.email,
-    phone:       r.phone ?? undefined,
-    checkIn:     r.check_in,
-    checkOut:    r.check_out,
-    nights:      r.nights,
-    guestCount:  r.guest_count,
-    message:     r.message ?? undefined,
-    source:      r.source ?? undefined,
-    status:      r.status,
-    nightlyRate: r.nightly_rate ?? undefined,
-    depositPaid: r.deposit_paid,
-    balancePaid: r.balance_paid,
-    revenueId:   r.revenue_id ?? undefined,
-    createdAt:   r.created_at,
+    id:            r.id,
+    guestName:     r.guest_name,
+    email:         r.email,
+    phone:         r.phone ?? undefined,
+    checkIn:       r.check_in,
+    checkOut:      r.check_out,
+    nights:        r.nights,
+    guestCount:    r.guest_count,
+    message:       r.message ?? undefined,
+    source:        r.source ?? undefined,
+    status:        r.status,
+    nightlyRate:   r.nightly_rate ?? undefined,
+    rateBreakdown: r.rate_breakdown ?? undefined,
+    quotedTotal:   Number(r.total_amount ?? 0),
+    depositPaid:   r.deposit_paid,
+    balancePaid:   r.balance_paid,
+    revenueId:     r.revenue_id ?? undefined,
+    createdAt:     r.created_at,
   };
 }
 
@@ -63,6 +76,7 @@ export default function BookingRequestsPage() {
   const [actionId,     setActionId]     = useState<string | null>(null);
   const [rateModal,    setRateModal]    = useState<BookingRequest | null>(null);
   const [rateInput,    setRateInput]    = useState("");
+  const [totalInput,   setTotalInput]   = useState("");
   const [depositModal, setDepositModal] = useState<BookingRequest | null>(null);
   const [depositMethod, setDepositMethod] = useState("Zelle");
   const [depositPct,   setDepositPct]   = useState(30);
@@ -84,10 +98,17 @@ export default function BookingRequestsPage() {
     declined: requests.filter(r => r.status === "declined").length,
   };
 
-  async function approve(req: BookingRequest, nightlyRate?: number) {
+  async function approve(req: BookingRequest, nightlyRate?: number, confirmedTotal?: number) {
     setActionId(req.id);
-    const rate = nightlyRate ?? req.nightlyRate ?? 0;
-    const total = rate * req.nights;
+    let rate: number;
+    let total: number;
+    if (confirmedTotal !== undefined) {
+      total = confirmedTotal;
+      rate  = req.nights > 0 ? Math.round((confirmedTotal / req.nights) * 100) / 100 : 0;
+    } else {
+      rate  = nightlyRate ?? req.nightlyRate ?? 0;
+      total = rate * req.nights;
+    }
 
     // Create revenue entry + linked stay (via revenue context pattern)
     const { data: revRow, error: revErr } = await supabase.from("revenue").insert({
@@ -147,10 +168,16 @@ export default function BookingRequestsPage() {
   }
 
   function openApprove(req: BookingRequest) {
-    if (!req.nightlyRate) {
+    if (req.quotedTotal > 0) {
+      // Has a quoted total from the website booking form — show pre-filled total modal
+      setTotalInput(String(req.quotedTotal));
+      setRateModal(req);
+    } else if (!req.nightlyRate) {
+      // No quote and no existing rate — fall back to asking for nightly rate
       setRateInput("");
       setRateModal(req);
     } else {
+      // Already has a rate — approve directly
       approve(req);
     }
   }
@@ -375,40 +402,91 @@ export default function BookingRequestsPage() {
         </main>
       </div>
 
-      {/* Set nightly rate modal */}
+      {/* Approve modal — quoted mode (has total from website) or manual mode (nightly rate) */}
       {rateModal && (
         <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
           onClick={e => { if (e.target === e.currentTarget) setRateModal(null); }}>
-          <div className="bg-white rounded-2xl" style={{ width: 360, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#1c1c1a", marginBottom: 6 }}>Set nightly rate</div>
+          <div className="bg-white rounded-2xl" style={{ width: 400, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1c1c1a", marginBottom: 4 }}>Approve booking</div>
             <div style={{ fontSize: 13, color: "#6b6960", marginBottom: 20 }}>
-              {rateModal.guestName} · {rateModal.nights} nights · {fmtDate(rateModal.checkIn)}
+              {rateModal.guestName} · {rateModal.nights} night{rateModal.nights !== 1 ? "s" : ""} · {fmtDate(rateModal.checkIn)} → {fmtDate(rateModal.checkOut)}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-              <span style={{ color: "#9e9b93", fontSize: 16 }}>$</span>
-              <input
-                type="number" min={0} value={rateInput} onChange={e => setRateInput(e.target.value)}
-                placeholder="0"
-                autoFocus
-                style={{ flex: 1, height: 44, border: "1px solid #e4e2dc", borderRadius: 10, padding: "0 12px", fontSize: 20, fontWeight: 700, color: "#1c1c1a", outline: "none" }}
-              />
-              <span style={{ fontSize: 14, color: "#9e9b93" }}>/night</span>
-            </div>
-            {rateInput && Number(rateInput) > 0 && (
-              <div style={{ background: "#f5f4f1", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#6b6960", marginBottom: 16 }}>
-                Total: <strong>${Number(rateInput) * rateModal.nights}</strong> · Deposit (30%): <strong>${Math.round(Number(rateInput) * rateModal.nights * 0.3)}</strong>
-              </div>
+
+            {rateModal.quotedTotal > 0 ? (
+              <>
+                {/* Quoted summary from website */}
+                <div style={{ background: "#f5f4f1", borderRadius: 10, padding: "14px 16px", marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1c1c1a", marginBottom: rateModal.rateBreakdown ? 10 : 0 }}>
+                    Guest was quoted: <span style={{ color: "#3b9e95" }}>${rateModal.quotedTotal.toLocaleString()}</span> total
+                  </div>
+                  {rateModal.rateBreakdown && rateModal.rateBreakdown.map((seg, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b6960", marginTop: 4 }}>
+                      <span>
+                        {seg.nights} night{seg.nights !== 1 ? "s" : ""} × ${seg.rate.toLocaleString()}
+                        {seg.rateName !== "Standard rate" ? ` (${seg.rateName})` : ""}
+                      </span>
+                      <span style={{ fontWeight: 600 }}>${seg.subtotal.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Editable confirmed total */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Confirmed total</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "#9e9b93", fontSize: 16 }}>$</span>
+                    <input
+                      type="number" min={0} value={totalInput} onChange={e => setTotalInput(e.target.value)}
+                      autoFocus
+                      style={{ flex: 1, height: 44, border: "1px solid #e4e2dc", borderRadius: 10, padding: "0 12px", fontSize: 20, fontWeight: 700, color: "#1c1c1a", outline: "none" }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 12, color: "#9e9b93", marginTop: 6 }}>
+                    Adjust if needed — guest will be notified of the confirmed rate.
+                  </div>
+                </div>
+                <div className="flex gap-2" style={{ marginTop: 20 }}>
+                  <button onClick={() => setRateModal(null)} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                  <button
+                    onClick={() => approve(rateModal, undefined, Number(totalInput))}
+                    disabled={!totalInput || Number(totalInput) <= 0}
+                    style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: Number(totalInput) > 0 ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: Number(totalInput) > 0 ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
+                  >
+                    Approve →
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Manual / fallback: ask for nightly rate */}
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Nightly rate</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+                  <span style={{ color: "#9e9b93", fontSize: 16 }}>$</span>
+                  <input
+                    type="number" min={0} value={rateInput} onChange={e => setRateInput(e.target.value)}
+                    placeholder="0"
+                    autoFocus
+                    style={{ flex: 1, height: 44, border: "1px solid #e4e2dc", borderRadius: 10, padding: "0 12px", fontSize: 20, fontWeight: 700, color: "#1c1c1a", outline: "none" }}
+                  />
+                  <span style={{ fontSize: 14, color: "#9e9b93" }}>/night</span>
+                </div>
+                {rateInput && Number(rateInput) > 0 && (
+                  <div style={{ background: "#f5f4f1", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#6b6960", marginBottom: 16 }}>
+                    Total: <strong>${Number(rateInput) * rateModal.nights}</strong> · Deposit (30%): <strong>${Math.round(Number(rateInput) * rateModal.nights * 0.3)}</strong>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => setRateModal(null)} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                  <button
+                    onClick={() => approve(rateModal, Number(rateInput))}
+                    disabled={!rateInput || Number(rateInput) <= 0}
+                    style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: Number(rateInput) > 0 ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: Number(rateInput) > 0 ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
+                  >
+                    Approve
+                  </button>
+                </div>
+              </>
             )}
-            <div className="flex gap-2">
-              <button onClick={() => setRateModal(null)} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
-              <button
-                onClick={() => approve(rateModal, Number(rateInput))}
-                disabled={!rateInput || Number(rateInput) <= 0}
-                style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: Number(rateInput) > 0 ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: Number(rateInput) > 0 ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
-              >
-                Approve
-              </button>
-            </div>
           </div>
         </div>
       )}
