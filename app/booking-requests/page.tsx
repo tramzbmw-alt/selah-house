@@ -125,6 +125,12 @@ export default function BookingRequestsPage() {
     }).select().single();
 
     if (revErr) { console.error(revErr); setActionId(null); return; }
+    console.log("[approve] revenue entry created:", {
+      id:             revRow.id,
+      check_in:       revRow.check_in,
+      total_amount:   revRow.total_amount,
+      payment_status: revRow.payment_status,
+    });
 
     // Create gold calendar stay linked to revenue
     const { error: stayErr } = await supabase.from("stays").insert({
@@ -182,7 +188,12 @@ export default function BookingRequestsPage() {
   }
 
   async function markBalancePaid(id: string) {
+    const req = requests.find(r => r.id === id);
     await supabase.from("booking_requests").update({ balance_paid: true }).eq("id", id);
+    if (req?.revenueId) {
+      await supabase.from("revenue").update({ payment_status: "Paid" }).eq("id", req.revenueId);
+      revenueEvents.refresh();
+    }
     load();
   }
 
