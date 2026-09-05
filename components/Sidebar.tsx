@@ -15,6 +15,7 @@ import {
   IconUsers,
   IconSettings,
   IconInbox,
+  IconExternalLink,
 } from "@tabler/icons-react";
 
 const NAV = [
@@ -179,6 +180,24 @@ export default function Sidebar() {
           <IconSettings size={15} strokeWidth={1.75} />
           Settings
         </Link>
+        <a
+          href="https://selahbytheseanc.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150"
+          style={{ color: "rgba(255,255,255,0.28)", textDecoration: "none" }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.05)";
+            (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.6)";
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+            (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.28)";
+          }}
+        >
+          <IconExternalLink size={15} strokeWidth={1.75} />
+          View website
+        </a>
       </div>
     </aside>
   );
