@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   IconSettings, IconCurrencyDollar, IconCheck,
-  IconCalendar, IconPlus, IconPencil, IconTrash, IconX,
+  IconCalendar, IconPlus, IconPencil, IconTrash, IconX, IconLock,
 } from "@tabler/icons-react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
@@ -57,6 +57,13 @@ export default function SettingsPage() {
   const [errors,  setErrors]  = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
+  // Booking access state
+  const [codeEnabled,      setCodeEnabled]      = useState(false);
+  const [bookingCode,      setBookingCode]       = useState("");
+  const [accessSaving,     setAccessSaving]      = useState(false);
+  const [accessSaved,      setAccessSaved]       = useState(false);
+  const [accessError,      setAccessError]       = useState("");
+
   // Seasonal rates state
   const [rates,        setRates]        = useState<SeasonalRate[]>([]);
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -70,10 +77,15 @@ export default function SettingsPage() {
   const [editError,    setEditError]    = useState("");
   const [deletingId,   setDeletingId]   = useState<string | null>(null);
 
-  // Load pricing settings
+  // Load pricing settings + booking access settings
   useEffect(() => {
     supabase.from("settings").select("key,value").then(({ data }) => {
-      if (data) setValues(Object.fromEntries(data.map(r => [r.key, r.value])));
+      if (data) {
+        const map = Object.fromEntries(data.map(r => [r.key, r.value]));
+        setValues(map);
+        setCodeEnabled(map.booking_code_enabled === "true");
+        setBookingCode(map.booking_code ?? "");
+      }
       setLoading(false);
     });
   }, []);
@@ -88,6 +100,20 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => { loadRates(); }, [loadRates]);
+
+  // Save booking access settings
+  async function saveAccess() {
+    if (!bookingCode.trim()) { setAccessError("Access code cannot be empty."); return; }
+    setAccessSaving(true); setAccessError("");
+    const { error } = await supabase.from("settings").upsert([
+      { key: "booking_code_enabled", value: String(codeEnabled), updated_at: new Date().toISOString() },
+      { key: "booking_code",         value: bookingCode.trim(),   updated_at: new Date().toISOString() },
+    ], { onConflict: "key" });
+    setAccessSaving(false);
+    if (error) { setAccessError(error.message); return; }
+    setAccessSaved(true);
+    setTimeout(() => setAccessSaved(false), 2200);
+  }
 
   // Save a pricing field
   async function save(key: string) {
@@ -359,6 +385,67 @@ export default function SettingsPage() {
           <p style={{ fontSize: 12, color: "#c0bdb6", marginTop: 4 }}>
             Seasonal rates override the standard nightly rate on the booking form for the specified date ranges.
           </p>
+
+          {/* ── Booking Access card ──────────────────────────────────────── */}
+          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e6e4de", maxWidth: 700, overflow: "hidden", marginTop: 24 }}>
+            <div style={{ padding: "16px 24px", borderBottom: "1px solid #f0ede8", display: "flex", alignItems: "center", gap: 8 }}>
+              <IconLock size={15} strokeWidth={1.75} style={{ color: "#3b9e95" }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.1em" }}>Booking Access</span>
+            </div>
+
+            <div style={{ padding: "20px 24px" }}>
+              {/* Toggle row */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1a", marginBottom: 3 }}>Require access code</div>
+                  <div style={{ fontSize: 12, color: "#9e9b93" }}>When enabled, guests must enter this code to access the booking form</div>
+                </div>
+                {/* Toggle switch */}
+                <button
+                  onClick={() => setCodeEnabled(v => !v)}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
+                    background: codeEnabled ? "#3b9e95" : "#d4cfc6",
+                    position: "relative", flexShrink: 0, transition: "background 0.2s",
+                  }}
+                >
+                  <span style={{
+                    position: "absolute", top: 3, left: codeEnabled ? 23 : 3, width: 18, height: 18,
+                    borderRadius: "50%", background: "#fff",
+                    transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  }} />
+                </button>
+              </div>
+
+              {/* Code field */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#9e9b93", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Access code</label>
+                <input
+                  type="text"
+                  value={bookingCode}
+                  onChange={e => setBookingCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. SELAH2025"
+                  style={{ ...TEXT_IN, width: 200, textAlign: "left", fontWeight: 700, letterSpacing: "0.08em", fontSize: 15 }}
+                />
+              </div>
+
+              {accessError && <div style={{ fontSize: 12, color: "#b93228", marginBottom: 12 }}>{accessError}</div>}
+
+              <button
+                onClick={saveAccess}
+                disabled={accessSaving}
+                style={{
+                  height: 36, padding: "0 20px", borderRadius: 8, border: "none",
+                  background: accessSaved ? "rgba(59,158,149,0.12)" : accessSaving ? "#e4e2dc" : "#3b9e95",
+                  color: accessSaved ? "#16645d" : accessSaving ? "#9e9b93" : "#fff",
+                  fontSize: 13, fontWeight: 600, cursor: accessSaving ? "default" : "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 6, transition: "background 0.15s, color 0.15s",
+                }}
+              >
+                {accessSaved ? <><IconCheck size={13} strokeWidth={2.5} /> Saved</> : accessSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
         </main>
       </div>
     </div>
