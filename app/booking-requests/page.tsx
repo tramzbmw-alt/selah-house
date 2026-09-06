@@ -78,6 +78,7 @@ export default function BookingRequestsPage() {
   const [rateModal,    setRateModal]    = useState<BookingRequest | null>(null);
   const [rateInput,    setRateInput]    = useState("");
   const [totalInput,   setTotalInput]   = useState("");
+  const [confirmMsg,   setConfirmMsg]   = useState("");
   const [cancelModal,  setCancelModal]  = useState<BookingRequest | null>(null);
   const [depositModal, setDepositModal] = useState<BookingRequest | null>(null);
   const [depositMethod, setDepositMethod] = useState("Zelle");
@@ -125,12 +126,6 @@ export default function BookingRequestsPage() {
     }).select().single();
 
     if (revErr) { console.error(revErr); setActionId(null); return; }
-    console.log("[approve] revenue entry created:", {
-      id:             revRow.id,
-      check_in:       revRow.check_in,
-      total_amount:   revRow.total_amount,
-      payment_status: revRow.payment_status,
-    });
 
     // Create gold calendar stay linked to revenue
     const { error: stayErr } = await supabase.from("stays").insert({
@@ -153,9 +148,29 @@ export default function BookingRequestsPage() {
       revenue_id:   revRow.id,
     }).eq("id", req.id);
 
+    // Send confirmation email to guest
+    try {
+      await fetch("/api/approve-booking", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          guestName: req.guestName,
+          email:     req.email,
+          checkIn:   req.checkIn,
+          checkOut:  req.checkOut,
+          nights:    req.nights,
+          total,
+          message:   confirmMsg,
+        }),
+      });
+    } catch (emailErr) {
+      console.error("[approve] email error:", emailErr);
+    }
+
     revenueEvents.refresh();
     setActionId(null);
     setRateModal(null);
+    setConfirmMsg("");
     load();
   }
 
@@ -198,16 +213,20 @@ export default function BookingRequestsPage() {
   }
 
   function openApprove(req: BookingRequest) {
+    const defaultMsg =
+      `Hi ${req.guestName}, great news — your stay at Selah by the Sea has been confirmed! ` +
+      `We're so excited to host you from ${fmtDate(req.checkIn)} to ${fmtDate(req.checkOut)}. ` +
+      `We'll be in touch soon with payment details and everything you need to know before your arrival. ` +
+      `Feel free to reach out if you have any questions!`;
+    setConfirmMsg(defaultMsg);
+
     if (req.quotedTotal > 0) {
-      // Has a quoted total from the website booking form — show pre-filled total modal
       setTotalInput(String(req.quotedTotal));
       setRateModal(req);
     } else if (!req.nightlyRate) {
-      // No quote and no existing rate — fall back to asking for nightly rate
       setRateInput("");
       setRateModal(req);
     } else {
-      // Already has a rate — approve directly
       approve(req);
     }
   }
@@ -445,8 +464,8 @@ export default function BookingRequestsPage() {
       {/* Approve modal — quoted mode (has total from website) or manual mode (nightly rate) */}
       {rateModal && (
         <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
-          onClick={e => { if (e.target === e.currentTarget) setRateModal(null); }}>
-          <div className="bg-white rounded-2xl" style={{ width: 400, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+          onClick={e => { if (e.target === e.currentTarget) { setRateModal(null); setConfirmMsg(""); } }}>
+          <div className="bg-white rounded-2xl" style={{ width: 480, maxHeight: "90vh", overflowY: "auto", padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#1c1c1a", marginBottom: 4 }}>Approve booking</div>
             <div style={{ fontSize: 13, color: "#6b6960", marginBottom: 20 }}>
               {rateModal.guestName} · {rateModal.nights} night{rateModal.nights !== 1 ? "s" : ""} · {fmtDate(rateModal.checkIn)} → {fmtDate(rateModal.checkOut)}
@@ -471,7 +490,7 @@ export default function BookingRequestsPage() {
                 </div>
 
                 {/* Editable confirmed total */}
-                <div style={{ marginBottom: 8 }}>
+                <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Confirmed total</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: "#9e9b93", fontSize: 16 }}>$</span>
@@ -485,14 +504,29 @@ export default function BookingRequestsPage() {
                     Adjust if needed — guest will be notified of the confirmed rate.
                   </div>
                 </div>
-                <div className="flex gap-2" style={{ marginTop: 20 }}>
-                  <button onClick={() => setRateModal(null)} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
+
+                {/* Editable confirmation message */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Message to guest</div>
+                  <textarea
+                    value={confirmMsg}
+                    onChange={e => setConfirmMsg(e.target.value)}
+                    rows={5}
+                    style={{ width: "100%", border: "1px solid #e4e2dc", borderRadius: 10, padding: "12px", fontSize: 13, color: "#1c1c1a", lineHeight: 1.6, resize: "vertical", outline: "none", boxSizing: "border-box" }}
+                  />
+                  <div style={{ fontSize: 12, color: "#9e9b93", marginTop: 4 }}>
+                    This message will be emailed to the guest along with their booking details.
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button onClick={() => { setRateModal(null); setConfirmMsg(""); }} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
                   <button
                     onClick={() => approve(rateModal, undefined, Number(totalInput))}
-                    disabled={!totalInput || Number(totalInput) <= 0}
-                    style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: Number(totalInput) > 0 ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: Number(totalInput) > 0 ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
+                    disabled={!totalInput || Number(totalInput) <= 0 || !confirmMsg.trim()}
+                    style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: Number(totalInput) > 0 && confirmMsg.trim() ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: Number(totalInput) > 0 && confirmMsg.trim() ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
                   >
-                    Approve →
+                    Approve & Send →
                   </button>
                 </div>
               </>
@@ -500,7 +534,7 @@ export default function BookingRequestsPage() {
               <>
                 {/* Manual / fallback: ask for nightly rate */}
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Nightly rate</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                   <span style={{ color: "#9e9b93", fontSize: 16 }}>$</span>
                   <input
                     type="number" min={0} value={rateInput} onChange={e => setRateInput(e.target.value)}
@@ -515,14 +549,29 @@ export default function BookingRequestsPage() {
                     Total: <strong>${Number(rateInput) * rateModal.nights}</strong> · Deposit (30%): <strong>${Math.round(Number(rateInput) * rateModal.nights * 0.3)}</strong>
                   </div>
                 )}
+
+                {/* Editable confirmation message */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Message to guest</div>
+                  <textarea
+                    value={confirmMsg}
+                    onChange={e => setConfirmMsg(e.target.value)}
+                    rows={5}
+                    style={{ width: "100%", border: "1px solid #e4e2dc", borderRadius: 10, padding: "12px", fontSize: 13, color: "#1c1c1a", lineHeight: 1.6, resize: "vertical", outline: "none", boxSizing: "border-box" }}
+                  />
+                  <div style={{ fontSize: 12, color: "#9e9b93", marginTop: 4 }}>
+                    This message will be emailed to the guest along with their booking details.
+                  </div>
+                </div>
+
                 <div className="flex gap-2">
-                  <button onClick={() => setRateModal(null)} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                  <button onClick={() => { setRateModal(null); setConfirmMsg(""); }} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
                   <button
                     onClick={() => approve(rateModal, Number(rateInput))}
-                    disabled={!rateInput || Number(rateInput) <= 0}
-                    style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: Number(rateInput) > 0 ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: Number(rateInput) > 0 ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
+                    disabled={!rateInput || Number(rateInput) <= 0 || !confirmMsg.trim()}
+                    style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: Number(rateInput) > 0 && confirmMsg.trim() ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: Number(rateInput) > 0 && confirmMsg.trim() ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
                   >
-                    Approve
+                    Approve & Send
                   </button>
                 </div>
               </>
@@ -583,7 +632,7 @@ export default function BookingRequestsPage() {
             <div style={{ background: "#f5f4f1", borderRadius: 10, padding: "16px", fontSize: 14, color: "#1c1c1a", lineHeight: 1.65, whiteSpace: "pre-wrap", marginBottom: 20 }}>
               {depositModal.depositPaid
                 ? `Hi ${depositModal.guestName}!\n\nYour deposit is confirmed. The remaining balance of $${balanceAmount(depositModal)} is due before your check-in on ${fmtDate(depositModal.checkIn)}.\n\nPlease send via ${depositMethod}.\n\nLooking forward to hosting you at Selah by the Sea! 🌊`
-                : `Hi ${depositModal.guestName}!\n\nWe're excited to confirm your stay at Selah by the Sea from ${fmtDate(depositModal.checkIn)} to ${fmtDate(depositModal.checkOut)} (${depositModal.nights} nights).\n\nTo secure your reservation, please send the ${depositPct}% deposit of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * depositPct / 100)} via ${depositMethod}.\n\nThe remaining balance of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * (100 - depositPct) / 100)} will be due closer to your check-in date.\n\nThank you! 🌊`
+                : `Hi ${depositModal.guestName}!\n\nWe're excited to confirm your stay at Selah by the Sea from ${fmtDate(depositModal.checkIn)} to ${fmtDate(depositModal.checkOut)} (${depositModal.nights} nights).\n\nTo secure your reservation, please send the ${depositPct}% deposit of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * depositPct / 100)} via ${depositMethod}.\n\nThe remaining balance of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * (100 - depositPct) / 100)} will be due 5 days before your check-in date.\n\nThank you! 🌊`
               }
             </div>
 
@@ -594,7 +643,7 @@ export default function BookingRequestsPage() {
                   navigator.clipboard.writeText(
                     depositModal.depositPaid
                       ? `Hi ${depositModal.guestName}!\n\nYour deposit is confirmed. The remaining balance of $${balanceAmount(depositModal)} is due before your check-in on ${fmtDate(depositModal.checkIn)}.\n\nPlease send via ${depositMethod}.\n\nLooking forward to hosting you at Selah by the Sea! 🌊`
-                      : `Hi ${depositModal.guestName}!\n\nWe're excited to confirm your stay at Selah by the Sea from ${fmtDate(depositModal.checkIn)} to ${fmtDate(depositModal.checkOut)} (${depositModal.nights} nights).\n\nTo secure your reservation, please send the ${depositPct}% deposit of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * depositPct / 100)} via ${depositMethod}.\n\nThe remaining balance of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * (100 - depositPct) / 100)} will be due closer to your check-in date.\n\nThank you! 🌊`
+                      : `Hi ${depositModal.guestName}!\n\nWe're excited to confirm your stay at Selah by the Sea from ${fmtDate(depositModal.checkIn)} to ${fmtDate(depositModal.checkOut)} (${depositModal.nights} nights).\n\nTo secure your reservation, please send the ${depositPct}% deposit of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * depositPct / 100)} via ${depositMethod}.\n\nThe remaining balance of $${Math.round((depositModal.nightlyRate ?? 0) * depositModal.nights * (100 - depositPct) / 100)} will be due 5 days before your check-in date.\n\nThank you! 🌊`
                   );
                   setDepositModal(null);
                 }}
