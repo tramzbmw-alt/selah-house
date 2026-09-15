@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { supabase } from "@/lib/supabase";
-import { IconInbox, IconCheck, IconX, IconTrash, IconCurrencyDollar, IconMail, IconPhone } from "@tabler/icons-react";
+import { IconInbox, IconCheck, IconX, IconTrash, IconCurrencyDollar, IconMail, IconPhone, IconEdit } from "@tabler/icons-react";
 import { revenueEvents } from "@/lib/revenueEvents";
 
 type RateSegment = {
@@ -83,6 +83,11 @@ export default function BookingRequestsPage() {
   const [depositModal, setDepositModal] = useState<BookingRequest | null>(null);
   const [depositMethod, setDepositMethod] = useState("Zelle");
   const [depositPct,   setDepositPct]   = useState(30);
+  const [editModal,    setEditModal]    = useState<BookingRequest | null>(null);
+  const [editGuestName, setEditGuestName] = useState("");
+  const [editCheckIn,  setEditCheckIn]  = useState("");
+  const [editCheckOut, setEditCheckOut] = useState("");
+  const [editTotal,    setEditTotal]    = useState("");
 
   const load = useCallback(() => {
     supabase.from("booking_requests").select("*").order("created_at", { ascending: false })
@@ -209,6 +214,55 @@ export default function BookingRequestsPage() {
       await supabase.from("revenue").update({ payment_status: "Paid" }).eq("id", req.revenueId);
       revenueEvents.refresh();
     }
+    load();
+  }
+
+  function openEdit(req: BookingRequest) {
+    setEditGuestName(req.guestName);
+    setEditCheckIn(req.checkIn);
+    setEditCheckOut(req.checkOut);
+    setEditTotal(String(req.quotedTotal > 0 ? req.quotedTotal : (req.nightlyRate ?? 0) * req.nights));
+    setEditModal(req);
+  }
+
+  async function saveEdit() {
+    if (!editModal) return;
+    setActionId(editModal.id);
+
+    const nights = Math.round((new Date(editCheckOut).getTime() - new Date(editCheckIn).getTime()) / 86400000);
+    const total  = Number(editTotal);
+    const rate   = nights > 0 ? Math.round((total / nights) * 100) / 100 : 0;
+
+    await supabase.from("booking_requests").update({
+      guest_name:   editGuestName,
+      check_in:     editCheckIn,
+      check_out:    editCheckOut,
+      nights,
+      total_amount: total,
+      nightly_rate: rate,
+    }).eq("id", editModal.id);
+
+    if (editModal.revenueId) {
+      await supabase.from("revenue").update({
+        guest_name:   editGuestName,
+        check_in:     editCheckIn,
+        check_out:    editCheckOut,
+        nights,
+        total_amount: total,
+        nightly_rate: rate,
+      }).eq("id", editModal.revenueId);
+
+      await supabase.from("stays").update({
+        guest:      editGuestName,
+        start_date: editCheckIn,
+        nights,
+        cost:       total,
+      }).eq("revenue_id", editModal.revenueId);
+    }
+
+    revenueEvents.refresh();
+    setActionId(null);
+    setEditModal(null);
     load();
   }
 
@@ -367,6 +421,18 @@ export default function BookingRequestsPage() {
 
                       {/* Right: Actions */}
                       <div className="flex flex-col gap-2 flex-shrink-0" style={{ minWidth: 160 }}>
+                        {/* Edit — approved only */}
+                        {req.status === "approved" && (
+                          <button
+                            onClick={() => openEdit(req)}
+                            disabled={busy}
+                            style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "center", background: "rgba(59,158,149,0.08)", color: "#1f7068", border: "1px solid rgba(59,158,149,0.2)", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 500, cursor: busy ? "default" : "pointer", marginBottom: 2 }}
+                          >
+                            <IconEdit size={12} />
+                            Edit booking
+                          </button>
+                        )}
+
                         {/* Cancel / Delete — always visible */}
                         <button
                           onClick={() => req.status === "approved" ? setCancelModal(req) : cancelRequest(req)}
@@ -599,6 +665,94 @@ export default function BookingRequestsPage() {
           </div>
         </div>
       )}
+
+      {/* Edit booking modal */}
+      {editModal && (() => {
+        const nights = editCheckIn && editCheckOut
+          ? Math.round((new Date(editCheckOut).getTime() - new Date(editCheckIn).getTime()) / 86400000)
+          : 0;
+        const canSave = editGuestName.trim() && editCheckIn && editCheckOut && nights > 0 && Number(editTotal) > 0;
+        return (
+          <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.38)", zIndex: 50 }}
+            onClick={e => { if (e.target === e.currentTarget) setEditModal(null); }}>
+            <div className="bg-white rounded-2xl" style={{ width: 460, padding: "28px", boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#1c1c1a", marginBottom: 4 }}>Edit booking</div>
+              <div style={{ fontSize: 13, color: "#6b6960", marginBottom: 24 }}>
+                Changes will update the booking request, calendar stay, and revenue entry.
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>Guest name</label>
+                  <input
+                    type="text"
+                    value={editGuestName}
+                    onChange={e => setEditGuestName(e.target.value)}
+                    style={{ width: "100%", height: 40, border: "1px solid #e4e2dc", borderRadius: 10, padding: "0 12px", fontSize: 14, color: "#1c1c1a", outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>Check-in</label>
+                    <input
+                      type="date"
+                      value={editCheckIn}
+                      onChange={e => setEditCheckIn(e.target.value)}
+                      style={{ width: "100%", height: 40, border: "1px solid #e4e2dc", borderRadius: 10, padding: "0 12px", fontSize: 14, color: "#1c1c1a", outline: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>Check-out</label>
+                    <input
+                      type="date"
+                      value={editCheckOut}
+                      onChange={e => setEditCheckOut(e.target.value)}
+                      style={{ width: "100%", height: 40, border: "1px solid #e4e2dc", borderRadius: 10, padding: "0 12px", fontSize: 14, color: "#1c1c1a", outline: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+                </div>
+
+                {nights > 0 && (
+                  <div style={{ fontSize: 13, color: "#6b6960", background: "#f5f4f1", borderRadius: 8, padding: "8px 12px" }}>
+                    {nights} night{nights !== 1 ? "s" : ""}
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b6960", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>Confirmed total</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "#9e9b93", fontSize: 16 }}>$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editTotal}
+                      onChange={e => setEditTotal(e.target.value)}
+                      style={{ flex: 1, height: 40, border: "1px solid #e4e2dc", borderRadius: 10, padding: "0 12px", fontSize: 18, fontWeight: 700, color: "#1c1c1a", outline: "none" }}
+                    />
+                  </div>
+                  {nights > 0 && Number(editTotal) > 0 && (
+                    <div style={{ fontSize: 12, color: "#9e9b93", marginTop: 4 }}>
+                      ${Math.round((Number(editTotal) / nights) * 100) / 100}/night average
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2" style={{ marginTop: 24 }}>
+                <button onClick={() => setEditModal(null)} style={{ flex: 1, height: 40, borderRadius: 10, border: "1px solid #e4e2dc", background: "#f4f3f0", color: "#6b6960", cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                <button
+                  onClick={saveEdit}
+                  disabled={!canSave || actionId === editModal.id}
+                  style={{ flex: 1, height: 40, borderRadius: 10, border: "none", background: canSave ? "#3b9e95" : "#e4e2dc", color: "#fff", cursor: canSave ? "pointer" : "default", fontSize: 14, fontWeight: 600 }}
+                >
+                  {actionId === editModal.id ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Deposit/balance request modal */}
       {depositModal && (

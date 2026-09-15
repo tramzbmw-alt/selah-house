@@ -58,11 +58,14 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
 
   // Booking access state
-  const [codeEnabled,      setCodeEnabled]      = useState(false);
-  const [bookingCode,      setBookingCode]       = useState("");
-  const [accessSaving,     setAccessSaving]      = useState(false);
-  const [accessSaved,      setAccessSaved]       = useState(false);
-  const [accessError,      setAccessError]       = useState("");
+  type AccessCode = { label: string; code: string };
+  const [codeEnabled,  setCodeEnabled]  = useState(false);
+  const [accessCodes,  setAccessCodes]  = useState<AccessCode[]>([]);
+  const [newLabel,     setNewLabel]     = useState("");
+  const [newCode,      setNewCode]      = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessSaved,  setAccessSaved]  = useState(false);
+  const [accessError,  setAccessError]  = useState("");
 
   // Seasonal rates state
   const [rates,        setRates]        = useState<SeasonalRate[]>([]);
@@ -84,7 +87,7 @@ export default function SettingsPage() {
         const map = Object.fromEntries(data.map(r => [r.key, r.value]));
         setValues(map);
         setCodeEnabled(map.booking_code_enabled === "true");
-        setBookingCode(map.booking_code ?? "");
+        try { setAccessCodes(JSON.parse(map.booking_codes ?? "[]")); } catch { setAccessCodes([]); }
       }
       setLoading(false);
     });
@@ -103,16 +106,25 @@ export default function SettingsPage() {
 
   // Save booking access settings
   async function saveAccess() {
-    if (!bookingCode.trim()) { setAccessError("Access code cannot be empty."); return; }
     setAccessSaving(true); setAccessError("");
     const { error } = await supabase.from("settings").upsert([
-      { key: "booking_code_enabled", value: String(codeEnabled), updated_at: new Date().toISOString() },
-      { key: "booking_code",         value: bookingCode.trim(),   updated_at: new Date().toISOString() },
+      { key: "booking_code_enabled", value: String(codeEnabled),          updated_at: new Date().toISOString() },
+      { key: "booking_codes",        value: JSON.stringify(accessCodes),   updated_at: new Date().toISOString() },
     ], { onConflict: "key" });
     setAccessSaving(false);
     if (error) { setAccessError(error.message); return; }
     setAccessSaved(true);
     setTimeout(() => setAccessSaved(false), 2200);
+  }
+
+  function addCode() {
+    if (!newLabel.trim() || !newCode.trim()) return;
+    setAccessCodes(c => [...c, { label: newLabel.trim(), code: newCode.trim().toUpperCase() }]);
+    setNewLabel(""); setNewCode("");
+  }
+
+  function removeCode(i: number) {
+    setAccessCodes(c => c.filter((_, idx) => idx !== i));
   }
 
   // Save a pricing field
@@ -398,35 +410,56 @@ export default function SettingsPage() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1a", marginBottom: 3 }}>Require access code</div>
-                  <div style={{ fontSize: 12, color: "#9e9b93" }}>When enabled, guests must enter this code to access the booking form</div>
+                  <div style={{ fontSize: 12, color: "#9e9b93" }}>When enabled, guests must enter a valid code to access the booking form</div>
                 </div>
-                {/* Toggle switch */}
                 <button
                   onClick={() => setCodeEnabled(v => !v)}
-                  style={{
-                    width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
-                    background: codeEnabled ? "#3b9e95" : "#d4cfc6",
-                    position: "relative", flexShrink: 0, transition: "background 0.2s",
-                  }}
+                  style={{ width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: codeEnabled ? "#3b9e95" : "#d4cfc6", position: "relative", flexShrink: 0, transition: "background 0.2s" }}
                 >
-                  <span style={{
-                    position: "absolute", top: 3, left: codeEnabled ? 23 : 3, width: 18, height: 18,
-                    borderRadius: "50%", background: "#fff",
-                    transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                  }} />
+                  <span style={{ position: "absolute", top: 3, left: codeEnabled ? 23 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                 </button>
               </div>
 
-              {/* Code field */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#9e9b93", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Access code</label>
+              {/* Code list */}
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#9e9b93", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Access codes</label>
+
+              {accessCodes.length > 0 && (
+                <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {accessCodes.map((c, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#fafaf9", border: "1px solid #e4e2dc", borderRadius: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#1c1c1a", minWidth: 80 }}>{c.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#3b9e95", letterSpacing: "0.08em", flex: 1 }}>{c.code}</span>
+                      <button onClick={() => removeCode(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#b93228", display: "flex", alignItems: "center", padding: 2 }}>
+                        <IconX size={14} strokeWidth={2} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new code */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
                 <input
                   type="text"
-                  value={bookingCode}
-                  onChange={e => setBookingCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. SELAH2025"
-                  style={{ ...TEXT_IN, width: 200, textAlign: "left", fontWeight: 700, letterSpacing: "0.08em", fontSize: 15 }}
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  placeholder="Label (e.g. Family)"
+                  style={{ ...TEXT_IN, width: 130, textAlign: "left", fontWeight: 400 }}
                 />
+                <input
+                  type="text"
+                  value={newCode}
+                  onChange={e => setNewCode(e.target.value.toUpperCase())}
+                  placeholder="CODE"
+                  style={{ ...TEXT_IN, width: 130, textAlign: "left", fontWeight: 700, letterSpacing: "0.08em" }}
+                />
+                <button
+                  onClick={addCode}
+                  disabled={!newLabel.trim() || !newCode.trim()}
+                  style={{ height: 36, padding: "0 14px", borderRadius: 8, border: "1px solid #e4e2dc", background: "#fafaf9", fontSize: 13, fontWeight: 600, color: "#3b9e95", cursor: !newLabel.trim() || !newCode.trim() ? "default" : "pointer", display: "flex", alignItems: "center", gap: 5, opacity: !newLabel.trim() || !newCode.trim() ? 0.5 : 1 }}
+                >
+                  <IconPlus size={13} strokeWidth={2.5} /> Add
+                </button>
               </div>
 
               {accessError && <div style={{ fontSize: 12, color: "#b93228", marginBottom: 12 }}>{accessError}</div>}
@@ -434,13 +467,7 @@ export default function SettingsPage() {
               <button
                 onClick={saveAccess}
                 disabled={accessSaving}
-                style={{
-                  height: 36, padding: "0 20px", borderRadius: 8, border: "none",
-                  background: accessSaved ? "rgba(59,158,149,0.12)" : accessSaving ? "#e4e2dc" : "#3b9e95",
-                  color: accessSaved ? "#16645d" : accessSaving ? "#9e9b93" : "#fff",
-                  fontSize: 13, fontWeight: 600, cursor: accessSaving ? "default" : "pointer",
-                  display: "inline-flex", alignItems: "center", gap: 6, transition: "background 0.15s, color 0.15s",
-                }}
+                style={{ height: 36, padding: "0 20px", borderRadius: 8, border: "none", background: accessSaved ? "rgba(59,158,149,0.12)" : accessSaving ? "#e4e2dc" : "#3b9e95", color: accessSaved ? "#16645d" : accessSaving ? "#9e9b93" : "#fff", fontSize: 13, fontWeight: 600, cursor: accessSaving ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6, transition: "background 0.15s, color 0.15s" }}
               >
                 {accessSaved ? <><IconCheck size={13} strokeWidth={2.5} /> Saved</> : accessSaving ? "Saving…" : "Save"}
               </button>
